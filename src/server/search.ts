@@ -91,17 +91,60 @@ const FIELD_WEIGHT: Record<Field, number> = {
   note: 0.5,
 };
 
+/** Levenshtein distance between two strings. */
+function editDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const temp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1]
+        ? prev
+        : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = temp;
+    }
+  }
+  return dp[n];
+}
+
+/** Find the best fuzzy match score for a token against words in text.
+ *  Returns 0 if no match, or a score proportional to similarity (max ~token length). */
+function fuzzyMatch(token: string, text: string): number {
+  const words = text.split(/[^a-z0-9]+/).filter(w => w.length >= 2);
+  let best = 0;
+  const maxDist = token.length >= 5 ? 2 : 1;
+  for (const w of words) {
+    if (Math.abs(w.length - token.length) > maxDist) continue;
+    const dist = editDistance(token, w);
+    if (dist <= maxDist) {
+      const score = (token.length - dist) * 1.5; // lower than exact match
+      if (score > best) best = score;
+    }
+  }
+  return best;
+}
+
 /**
  * Score a doc against the query tokens.
  * - Each token hit adds score proportional to its length.
  * - A literal phrase hit (the full query as a substring) adds a flat bonus.
+ * - Fuzzy matches get partial scores when exact match fails.
  * - Field weight is applied as a multiplier.
  */
 function scoreDoc(tokens: string[], phrase: string, docText: string, field: Field): number {
   const lower = docText.toLowerCase();
   let s = 0;
   for (const t of tokens) {
-    if (lower.includes(t)) s += Math.min(t.length, 12) * 2;
+    if (lower.includes(t)) {
+      s += Math.min(t.length, 12) * 2;
+    } else {
+      // Fallback: fuzzy match
+      s += fuzzyMatch(t, lower);
+    }
   }
   if (phrase && phrase.length >= MIN_TOKEN_LENGTH && lower.includes(phrase)) {
     s += phrase.length * 3;
@@ -134,6 +177,24 @@ function makeSnippet(text: string, query: string, tokens: string[]): string {
       if (at >= 0 && (idx < 0 || at < idx)) {
         idx = at;
         hitLen = t.length;
+      }
+    }
+    // Fuzzy fallback: find closest word if no exact match
+    if (idx < 0) {
+      const words = lower.split(/[^a-z0-9]+/);
+      for (const t of tokens) {
+        const maxDist = t.length >= 5 ? 2 : 1;
+        for (const w of words) {
+          if (w.length < 2 || Math.abs(w.length - t.length) > maxDist) continue;
+          const dist = editDistance(t, w);
+          if (dist <= maxDist) {
+            const wIdx = lower.indexOf(w);
+            if (wIdx >= 0 && (idx < 0 || dist < hitLen)) {
+              idx = wIdx;
+              hitLen = w.length;
+            }
+          }
+        }
       }
     }
   }
