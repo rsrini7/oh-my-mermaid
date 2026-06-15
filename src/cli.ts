@@ -33,7 +33,7 @@ function printHelp(): void {
 oh-my-mermaid (omm) — Architecture mirror for vibe coding
 
 Usage:
-  omm init                          Initialize .omm/ directory (usually not needed)
+  omm init [--template <name>]      Initialize .omm/ directory or scaffold from template
   omm setup [platform]              Register skills with AI coding tools
   omm setup --list                  Show detected platforms
   omm setup --teardown              Unregister from all platforms
@@ -91,7 +91,7 @@ async function main(): Promise<void> {
 
   switch (cmd) {
     case 'init':
-      commandInit();
+      commandInit(args.slice(1));
       return;
 
     case 'setup':

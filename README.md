@@ -79,6 +79,8 @@ Each element carries up to 7 fields: `description`, `diagram`, `context`, `const
 
 ```bash
 omm setup                          # Register skills with your AI tools
+omm init --template list           # Show available diagram templates
+omm init --template microservices  # Scaffold from a template
 omm view                           # Open interactive viewer
 omm list                           # List all perspectives
 omm show <element>                 # Show all fields for an element
@@ -129,6 +131,7 @@ The web viewer (`omm view`) includes:
 | **Cross-perspective nav** | "In" section shows which perspectives contain the element |
 | **Auto-width nav** | Left panel auto-sizes to fit the longest perspective name |
 | **Viewport-responsive fonts** | Font sizes scale with monitor width for readability |
+| **Diagram templates** | Scaffold from pre-built architectures via `omm init --template` |
 
 ## Cloud
 
