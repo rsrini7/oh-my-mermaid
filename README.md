@@ -92,6 +92,8 @@ omm diff <element>                 # Show diagram diff (added/removed nodes)
 omm refs <element>                 # Show incoming/outgoing references
 omm export <element> [--format svg|png] [-o file]  # Export diagram
 omm tag <element> [add|remove|set] [tags]          # Manage element tags
+omm push [--to repo] [--commit]    # Push to architecture repository
+omm pull [--from repo] [--all]     # Pull from architecture repository
 omm incremental                    # Plan a scoped re-scan based on git diff
 omm config language ko             # Set content language
 omm update                         # Update to latest version
@@ -135,13 +137,50 @@ The web viewer (`omm view`) includes:
 
 ## Cloud
 
-You can store your architecture in the cloud via [ohmymermaid.com](https://ohmymermaid.com).
+You can store architecture docs in a **dedicated git repo** — no external service needed.
 
 ```bash
-omm login && omm link && omm push
+# One-time setup: point to your team's architecture repo
+omm config arch-repo ~/arch/team-architecture
+
+# Push this project's docs to the arch repo
+omm push
+
+# Push with auto-commit to git
+omm push --commit -m "add auth-service docs"
+
+# Pull docs from arch repo
+omm pull
+
+# Pull all projects
+omm pull --all
+
+# Preview changes
+omm push --dry-run
 ```
 
-It's private by default. Share with your team, or make it public like [this example](https://ohmymermaid.com/share/c47e20a7063c231760361ed9cb9ec4b6).
+### Dedicated repo structure
+
+```
+~/arch/team-architecture/       ← shared git repo
+├── .omm/
+│   ├── project-a/              ← auto-created per project
+│   │   ├── auth-service/
+│   │   └── api-gateway/
+│   ├── project-b/
+│   │   └── storage/
+│   └── project-c/
+│       └── ...
+└── .git/
+```
+
+Each `omm push` syncs the local `.omm/` to the arch repo under the project name. Team members run `omm pull` to get the latest docs.
+
+### Also supports ohmymermaid.com
+
+```bash
+omm login && omm link && omm push   # cloud mode (legacy)
+```
 
 ## Supported AI Tools
 

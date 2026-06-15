@@ -25,8 +25,9 @@ import { commandConfig } from './commands/config.js';
 import { commandIncremental } from './commands/incremental.js';
 import { commandExport } from './commands/export.js';
 import { commandTag } from './commands/tag.js';
+import { commandArch } from './commands/arch.js';
 
-const GLOBAL_COMMANDS = ['init', 'setup', 'update', 'list', 'show', 'delete', 'status', 'diff', 'refs', 'validate', 'view', 'login', 'logout', 'push', 'pull', 'link', 'share', 'org', 'read', 'write', 'tree', 'config', 'incremental', 'export', 'tag', 'help'];
+const GLOBAL_COMMANDS = ['init', 'setup', 'update', 'list', 'show', 'delete', 'status', 'diff', 'refs', 'validate', 'view', 'login', 'logout', 'push', 'pull', 'link', 'share', 'org', 'read', 'write', 'tree', 'config', 'incremental', 'export', 'tag', 'arch', 'help'];
 
 function printHelp(): void {
   const help = `
@@ -58,8 +59,9 @@ Cloud:
   omm login                         Log in to omm.dev
   omm logout                        Log out
   omm link [org/slug]                Link project to a cloud slug
-  omm push                          Push .omm/ to cloud
-  omm pull                          Pull .omm/ from cloud
+  omm push [--to repo] [--commit]    Push .omm/ to architecture repository
+  omm pull [--from repo] [--all]     Pull .omm/ from architecture repository
+  omm arch init [--remote <url>]     Initialize architecture repository with git
   omm share                         Print the shareable URL
   omm org list                      List your organizations
   omm org switch <slug>             Set default organization
@@ -199,11 +201,11 @@ async function main(): Promise<void> {
       return;
 
     case 'push':
-      await commandPush();
+      await commandPush(args.slice(1));
       return;
 
     case 'pull':
-      await commandPull();
+      commandPull(args.slice(1));
       return;
 
     case 'share':
@@ -224,6 +226,10 @@ async function main(): Promise<void> {
 
     case 'tag':
       commandTag(args.slice(1));
+      return;
+
+    case 'arch':
+      commandArch(args.slice(1));
       return;
 
     default:
