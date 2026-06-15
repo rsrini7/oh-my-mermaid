@@ -54,12 +54,16 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
     }
     if (!nodeDims[n.id]) {
       const lbl = n.label.replace(/^@/,'');
-      const [mainLbl] = lbl.split('\n');
+      const parts = lbl.split('\n');
+      const mainLbl = parts[0];
+      const pathLbl = parts[1] || '';
       const hasPath = lbl.includes('\n');
-      const maxW = nodes.length > 10 ? 160 : 220;
-      const w = Math.min(maxW, Math.max(80, tw(mainLbl, '12px Inter,system-ui') + 44));
+      const maxW = nodes.length > 10 ? 200 : 260;
+      const mainW = tw(mainLbl, '12px Inter,system-ui') + 44;
+      const pathW = pathLbl ? tw(pathLbl, '9px SF Mono,Fira Code,monospace') + 32 : 0;
+      const w = Math.min(maxW, Math.max(90, Math.max(mainW, pathW)));
       const baseH = n.shape==='diamond' ? 42 : 38;
-      nodeDims[n.id] = {width: w, height: hasPath ? baseH + 14 : baseH};
+      nodeDims[n.id] = {width: w, height: hasPath ? baseH + 20 : baseH};
     }
   }
 
@@ -92,8 +96,8 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
   const dense = nodes.length > 10;
   function buildGraph(rd) {
     const g = new dagre.graphlib.Graph();
-    const nsep = dense ? 20 : 32;
-    const rsep = dense ? 28 : 44;
+    const nsep = dense ? 24 : 36;
+    const rsep = dense ? 32 : 48;
     g.setGraph({rankdir: rd, nodesep:nsep, ranksep:rsep, marginx:PAD_L, marginy:PAD_T});
     g.setDefaultEdgeLabel(() => ({}));
     for (const n of nodes) {
@@ -263,15 +267,19 @@ function renderFlatSVG(text) {
   const {rankdir, nodes, edges} = parsed;
   if (!nodes.length) return null;
   const g = new dagre.graphlib.Graph();
-  g.setGraph({rankdir, nodesep:36, ranksep:48, marginx:18, marginy:14});
+  g.setGraph({rankdir, nodesep:40, ranksep:52, marginx:18, marginy:14});
   g.setDefaultEdgeLabel(() => ({}));
   const dims = {};
   for (const n of nodes) {
     const lbl = n.label.replace(/^@/,'');
-    const [mainLbl] = lbl.split('\n');
+    const parts = lbl.split('\n');
+    const mainLbl = parts[0];
+    const pathLbl = parts[1] || '';
     const hasPath = lbl.includes('\n');
-    const w = Math.min(180,Math.max(60,tw(mainLbl,'11px Inter,system-ui')+28));
-    const h = (n.shape==='diamond'?34:28) + (hasPath ? 12 : 0);
+    const mainW = tw(mainLbl,'11px Inter,system-ui') + 28;
+    const pathW = pathLbl ? tw(pathLbl,'9px SF Mono,Fira Code,monospace') + 24 : 0;
+    const w = Math.min(220, Math.max(70, Math.max(mainW, pathW)));
+    const h = (n.shape==='diamond'?34:28) + (hasPath ? 18 : 0);
     dims[n.id]={w,h}; g.setNode(n.id,{width:w,height:h});
   }
   for (const e of edges) { if (g.hasNode(e.from)&&g.hasNode(e.to)) g.setEdge(e.from,e.to,{label:e.label}); }
