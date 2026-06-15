@@ -81,9 +81,9 @@ Each element carries up to 7 fields: `description`, `diagram`, `context`, `const
 omm setup                          # Register skills with your AI tools
 omm init --template list           # Show available diagram templates
 omm init --template microservices  # Scaffold from a template
-omm view                           # Open interactive viewer
-omm list                           # List all perspectives
-omm show <element>                 # Show all fields for an element
+omm view [--port <p>] [--project <n>]  Open interactive viewer
+omm list [--project <name>]         List perspectives (auto-detects arch repo)
+omm show <element> [--project <n>]  Show all fields for an element
 omm tree [perspective]             # Print element tree
 omm validate [element]             # Validate diagram(s)
 omm validate --changed             # Validate only changed elements (CI)
@@ -186,8 +186,18 @@ omm pull --project ArcClawInternal
 
 ```bash
 cd ~/ws/my-mm-docs
-omm view   # shows all projects
+
+# List all projects and their perspectives
+omm list
+
+# View a specific project
+omm view --project ArcClawInternal
+
+# Show an element from a specific project
+omm show command-surface --project ArcClawInternal
 ```
+
+When in an arch repo with multiple projects, use `--project <name>` to specify which project to work with. If only one project exists, it's auto-selected.
 
 ### Dedicated repo structure
 

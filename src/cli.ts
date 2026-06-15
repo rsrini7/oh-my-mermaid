@@ -105,7 +105,7 @@ async function main(): Promise<void> {
       return;
 
     case 'list':
-      commandList();
+      commandList(args.slice(1));
       return;
 
     case 'tree':
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
         process.stderr.write('error: omm show <path>\n');
         process.exit(1);
       }
-      commandShow(args[1]);
+      await commandShow(args[1], args.slice(2));
       return;
 
     case 'delete':
@@ -184,7 +184,7 @@ async function main(): Promise<void> {
           process.exit(1);
         }
       }
-      commandView(port);
+      commandView(port, args.slice(1));
       return;
     }
 
