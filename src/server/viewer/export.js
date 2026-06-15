@@ -88,7 +88,7 @@ function exportElementPng(cls, classesData, renderFlatSVG) {
   canvas.height = svgH * scale;
   const ctx = canvas.getContext('2d');
   ctx.scale(scale, scale);
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg').trim() || '#000';
   ctx.fillRect(0, 0, svgW, svgH);
 
   const img = new Image();
