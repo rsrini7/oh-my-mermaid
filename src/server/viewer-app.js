@@ -830,8 +830,8 @@ function openSidebar(cls, origCls) {
     const codeHtml = highlightMermaid(data.diagram);
     sbDiagram.innerHTML = `
       <div class="sb-diagram-toggle">
-        <button class="sb-diagram-tab active" onclick="this.parentElement.querySelectorAll('.sb-diagram-tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');this.parentElement.querySelector('.sb-diagram-view').style.display='block';this.parentElement.querySelector('.sb-code-view').style.display='none'">Diagram</button>
-        <button class="sb-diagram-tab" onclick="this.parentElement.querySelectorAll('.sb-diagram-tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');this.parentElement.querySelector('.sb-diagram-view').style.display='none';this.parentElement.querySelector('.sb-code-view').style.display='block'">Code</button>
+        <button class="sb-diagram-tab active" onclick="window.__showDiagramTab('diagram')">Diagram</button>
+        <button class="sb-diagram-tab" onclick="window.__showDiagramTab('code')">Code</button>
       </div>
       <div class="sb-diagram-view">${svg || '<div style="padding:16px;color:#666">Could not render diagram</div>'}</div>
       <div class="sb-code-view" style="display:none"><pre class="sb-code-pre">${codeHtml}</pre></div>
@@ -1572,6 +1572,17 @@ document.addEventListener('click', (e) => {
 
 // ── window globals for inline onclick handlers ────────────
 window.toggleTheme = function() { toggleTheme(); rebuildCanvas(); };
+window.__showDiagramTab = function(tab) {
+  const container = document.getElementById('sb-diagram');
+  if (!container) return;
+  container.querySelectorAll('.sb-diagram-tab').forEach((t, i) => {
+    t.classList.toggle('active', (tab === 'diagram' && i === 0) || (tab === 'code' && i === 1));
+  });
+  const diagramView = container.querySelector('.sb-diagram-view');
+  const codeView = container.querySelector('.sb-code-view');
+  if (diagramView) diagramView.style.display = tab === 'diagram' ? 'block' : 'none';
+  if (codeView) codeView.style.display = tab === 'code' ? 'block' : 'none';
+};
 window.toggleMobileNav = function() {
   const nav = document.getElementById('nav-sidebar');
   const overlay = document.getElementById('mobile-overlay');
