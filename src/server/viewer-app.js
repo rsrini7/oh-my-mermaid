@@ -264,6 +264,34 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
   return { svgContent: svg, W, H, labelOverlay };
 }
 
+// ── mermaid syntax highlighting ────────────────────────────
+function highlightMermaid(text) {
+  if (!text) return '';
+  const escHtml = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return text.split('\n').map(line => {
+    let h = escHtml(line);
+    // Comments
+    if (/^%%/.test(line)) return `<span class="mk-comment">${h}</span>`;
+    // Graph declaration
+    h = h.replace(/^(graph|flowchart)\s+(\w+)/i, '<span class="mk-keyword">$1</span> <span class="mk-direction">$2</span>');
+    // classDef
+    h = h.replace(/^(classDef)\s+(\S+)/i, '<span class="mk-keyword">$1</span> <span class="mk-class">$2</span>');
+    // class assignment
+    h = h.replace(/^(class)\s+([\w,\s-]+)\s+(\w+)$/i, '<span class="mk-keyword">$1</span> <span class="mk-node">$2</span> <span class="mk-class">$3</span>');
+    // Edges with labels
+    h = h.replace(/(-->|==>|-.->|---|~~>|--o|--x)(\|[^|]*\|)/g, '<span class="mk-arrow">$1</span><span class="mk-label">$2</span>');
+    // Edges without labels
+    h = h.replace(/(-->|==>|-.->|---|~~>|--o|--x)/g, '<span class="mk-arrow">$1</span>');
+    // Node definitions: id["Label"] or id(Label) etc.
+    h = h.replace(/(\b\w+)(\["[^"]*"\])/g, '<span class="mk-node">$1</span><span class="mk-label">$2</span>');
+    h = h.replace(/(\b\w+)(\([^)]*\))/g, '<span class="mk-node">$1</span><span class="mk-label">$2</span>');
+    h = h.replace(/(\b\w+)(\{[^}]*\})/g, '<span class="mk-node">$1</span><span class="mk-label">$2</span>');
+    // @ref nodes
+    h = h.replace(/@(\w+)/g, '<span class="mk-ref">@$1</span>');
+    return h;
+  }).join('\n');
+}
+
 // ── sidebar diagram renderer (flat, for sidebar only) ─────
 function renderFlatSVG(text) {
   if (!text) return null;
@@ -762,11 +790,19 @@ function openSidebar(cls, origCls) {
   const data=classesData[cls]||{}, refs=refsData[cls]||{};
   sbTitle.textContent=fmtLabel(cls);
 
-  // Render diagram SVG in sidebar
+  // Render diagram SVG in sidebar with code toggle
   sbDiagram.innerHTML = '';
   if (data.diagram) {
     const svg = renderFlatSVG(data.diagram);
-    if (svg) sbDiagram.innerHTML = svg;
+    const codeHtml = highlightMermaid(data.diagram);
+    sbDiagram.innerHTML = `
+      <div class="sb-diagram-toggle">
+        <button class="sb-diagram-tab active" onclick="this.parentElement.querySelectorAll('.sb-diagram-tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');this.parentElement.querySelector('.sb-diagram-view').style.display='block';this.parentElement.querySelector('.sb-code-view').style.display='none'">Diagram</button>
+        <button class="sb-diagram-tab" onclick="this.parentElement.querySelectorAll('.sb-diagram-tab').forEach(t=>t.classList.remove('active'));this.classList.add('active');this.parentElement.querySelector('.sb-diagram-view').style.display='none';this.parentElement.querySelector('.sb-code-view').style.display='block'">Code</button>
+      </div>
+      <div class="sb-diagram-view">${svg || '<div style="padding:16px;color:#666">Could not render diagram</div>'}</div>
+      <div class="sb-code-view" style="display:none"><pre class="sb-code-pre">${codeHtml}</pre></div>
+    `;
   }
 
   const md=t=>t?marked.parse(t):'';
