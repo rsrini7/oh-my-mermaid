@@ -155,6 +155,9 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
   let svg = '';
 
   // edges
+  // Dim edge labels when too many edges, show on hover
+  const manyEdges = edges.length > 12;
+
   edges.forEach((e,i) => {
     if (_gridExcluded.has(e.from)) return; // skip edges from grid children
     let pts, d, mid;
@@ -162,7 +165,6 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
     const tgtPos = _gridPositions[e.to] || g.node(e.to);
     if (!srcPos || !tgtPos) return;
     if (_gridPositions[e.to]) {
-      // Edge to grid child: direct path from parent to child grid position
       const mx = (srcPos.x + tgtPos.x) / 2, my = (srcPos.y + tgtPos.y) / 2;
       pts = [{x:srcPos.x,y:srcPos.y},{x:mx,y:my},{x:tgtPos.x,y:tgtPos.y}];
       d = smoothPath(pts);
@@ -175,13 +177,15 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
     }
     const ec = th.edgeColor0;
     const mk = `${uid}m${i}`;
+    const opacity = manyEdges ? '0.35' : '1';
+    const hoverClass = manyEdges ? ' edge-label-dim' : '';
     svg += `<defs><marker id="${mk}" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
       <path d="M0,0.5 L0,4.5 L6,2.5 z" fill="${ec}"/></marker></defs>
       <path class="edge-path" d="${d}" stroke="${ec}" stroke-width="2" fill="none" marker-end="url(#${mk})" data-from="${esc(e.from)}" data-to="${esc(e.to)}"/>`;
     if (e.label) {
       const lw = tw(e.label,'10px Inter')+12;
       const mx=r1(mid.x), my=r1(mid.y);
-      svg += `<g class="edge-label"><rect x="${mx-lw/2}" y="${my-8}" width="${lw}" height="16" rx="3" fill="${th.edgeLabelBg}"/>
+      svg += `<g class="edge-label${hoverClass}" opacity="${opacity}"><rect x="${mx-lw/2}" y="${my-8}" width="${lw}" height="16" rx="3" fill="${th.edgeLabelBg}"/>
         <text x="${mx}" y="${my+4}" text-anchor="middle" font-family="Inter,system-ui" font-size="10" fill="${th.edgeLabelText}">${esc(e.label)}</text></g>`;
     }
   });
