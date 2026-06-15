@@ -153,17 +153,10 @@ function scoreDoc(tokens: string[], phrase: string, docText: string, field: Fiel
 }
 
 /**
- * Build a snippet that highlights one of the matched tokens (or the phrase).
- * Output is HTML with <mark> tags; tokens are HTML-escaped first.
+ * Render a snippet with markdown formatting and match highlighting.
+ * Extracts a window around the match, renders inline markdown, then highlights.
  */
 function makeSnippet(text: string, query: string, tokens: string[]): string {
-  const esc = (s: string) => s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
   const phrase = query.trim().toLowerCase();
   const lower = text.toLowerCase();
   let idx = -1;
@@ -199,20 +192,46 @@ function makeSnippet(text: string, query: string, tokens: string[]): string {
     }
   }
 
+  // Extract a window around the match
+  let snippet: string;
   if (idx < 0) {
-    const head = text.slice(0, 220).trim();
-    return esc(head) + (text.length > 220 ? '…' : '');
+    snippet = text.slice(0, 220).trim();
+    if (text.length > 220) snippet += '…';
+  } else {
+    const start = Math.max(0, idx - 90);
+    const end = Math.min(text.length, idx + hitLen + 140);
+    snippet = (start > 0 ? '…' : '') + text.slice(start, end).trim() + (end < text.length ? '…' : '');
   }
 
-  const start = Math.max(0, idx - 90);
-  const end = Math.min(text.length, idx + hitLen + 140);
-  const slice = text.slice(start, end);
-  // Find the hit region inside slice.
-  const hitOffset = idx - start;
-  const before = esc(slice.slice(0, hitOffset));
-  const hit = esc(slice.slice(hitOffset, hitOffset + hitLen));
-  const after = esc(slice.slice(hitOffset + hitLen));
-  return (start > 0 ? '…' : '') + before + '<mark>' + hit + '</mark>' + after + (end < text.length ? '…' : '');
+  // Render inline markdown (bold, links, code) — safe subset
+  let html = snippet
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  // Bold **text**
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Italic *text*
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Inline code `text`
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Links [text](url)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:inherit">$1</a>');
+
+  // Highlight the matched term in the rendered HTML
+  if (idx >= 0 && tokens.length > 0) {
+    const matchText = snippet.slice(
+      idx < 0 ? 0 : idx - Math.max(0, idx - 90),
+      idx < 0 ? 0 : idx - Math.max(0, idx - 90) + hitLen
+    );
+    if (matchText) {
+      const escaped = matchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      try {
+        html = html.replace(new RegExp(escaped, 'i'), '<mark>$&</mark>');
+      } catch { /* regex safety */ }
+    }
+  }
+
+  return html;
 }
 
 function listOmmFiles(ommDir: string): string[] {
