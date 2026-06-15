@@ -267,27 +267,60 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
 // ── mermaid syntax highlighting ────────────────────────────
 function highlightMermaid(text) {
   if (!text) return '';
-  const escHtml = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const escH = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   return text.split('\n').map(line => {
-    let h = escHtml(line);
     // Comments
-    if (/^%%/.test(line)) return `<span class="mk-comment">${h}</span>`;
+    if (/^%%/.test(line)) return `<span class="mk-comment">${escH(line)}</span>`;
+    let h = '';
+    let rest = line;
+
     // Graph declaration
-    h = h.replace(/^(graph|flowchart)\s+(\w+)/i, '<span class="mk-keyword">$1</span> <span class="mk-direction">$2</span>');
+    let m = rest.match(/^(graph|flowchart)\s+(\w+)(.*)/i);
+    if (m) {
+      h += `<span class="mk-keyword">${escH(m[1])}</span> <span class="mk-direction">${escH(m[2])}</span>`;
+      rest = m[3];
+    }
+
     // classDef
-    h = h.replace(/^(classDef)\s+(\S+)/i, '<span class="mk-keyword">$1</span> <span class="mk-class">$2</span>');
+    m = rest.match(/^\s*(classDef)\s+(\S+)(.*)/i);
+    if (m) {
+      h += `<span class="mk-keyword">${escH(m[1])}</span> <span class="mk-class">${escH(m[2])}</span>${escH(m[3])}`;
+      return h;
+    }
+
     // class assignment
-    h = h.replace(/^(class)\s+([\w,\s-]+)\s+(\w+)$/i, '<span class="mk-keyword">$1</span> <span class="mk-node">$2</span> <span class="mk-class">$3</span>');
-    // Edges with labels
-    h = h.replace(/(-->|==>|-.->|---|~~>|--o|--x)(\|[^|]*\|)/g, '<span class="mk-arrow">$1</span><span class="mk-label">$2</span>');
-    // Edges without labels
-    h = h.replace(/(-->|==>|-.->|---|~~>|--o|--x)/g, '<span class="mk-arrow">$1</span>');
-    // Node definitions: id["Label"] or id(Label) etc.
-    h = h.replace(/(\b\w+)(\["[^"]*"\])/g, '<span class="mk-node">$1</span><span class="mk-label">$2</span>');
-    h = h.replace(/(\b\w+)(\([^)]*\))/g, '<span class="mk-node">$1</span><span class="mk-label">$2</span>');
-    h = h.replace(/(\b\w+)(\{[^}]*\})/g, '<span class="mk-node">$1</span><span class="mk-label">$2</span>');
-    // @ref nodes
-    h = h.replace(/@(\w+)/g, '<span class="mk-ref">@$1</span>');
+    m = rest.match(/^\s*(class)\s+([\w,\s-]+)\s+(\w+)$/i);
+    if (m) {
+      h += `<span class="mk-keyword">${escH(m[1])}</span> <span class="mk-node">${escH(m[2])}</span> <span class="mk-class">${escH(m[3])}</span>`;
+      return h;
+    }
+
+    // Split on edges to process each segment
+    const parts = rest.split(/((?:-->|==>|-.->|---|~~>|--o|--x)(?:\|[^|]*\|)?)/g);
+    for (const part of parts) {
+      // Edge with label
+      let em = part.match(/^(-->|==>|-.->|---|~~>|--o|--x)(\|[^|]*\|)$/);
+      if (em) {
+        h += `<span class="mk-arrow">${escH(em[1])}</span><span class="mk-label">${escH(em[2])}</span>`;
+        continue;
+      }
+      // Edge without label
+      if (/^(-->|==>|-.->|---|~~>|--o|--x)$/.test(part)) {
+        h += `<span class="mk-arrow">${escH(part)}</span>`;
+        continue;
+      }
+      // Text: escape first, then highlight nodes/labels/refs
+      let t = escH(part);
+      // @ref nodes
+      t = t.replace(/@(\w+)/g, '<span class="mk-ref">@$1</span>');
+      // Node with bracket label: id["Label"] — match escaped quotes
+      t = t.replace(/(\b[\w-]+)(\[&quot;[^&]*(?:&[^;]+?)*&quot;\])/g, '<span class="mk-node">$1</span><span class="mk-label">$2</span>');
+      // Node with paren label: id(Label)
+      t = t.replace(/(\b[\w-]+)(\([^)]*\))/g, '<span class="mk-node">$1</span><span class="mk-label">$2</span>');
+      // Node with brace label: id{Label}
+      t = t.replace(/(\b[\w-]+)(\{[^}]*\})/g, '<span class="mk-node">$1</span><span class="mk-label">$2</span>');
+      h += t;
+    }
     return h;
   }).join('\n');
 }
