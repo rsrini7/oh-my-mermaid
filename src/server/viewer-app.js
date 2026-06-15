@@ -24,8 +24,8 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
   const {rankdir, nodes, edges} = parsed;
   if (!nodes.length) return null;
 
-  // padding around the group content
-  const PAD_L = 16, PAD_R = 20, PAD_T = 20, PAD_B = 16;
+  // padding around the group content — must account for edge arrows + labels
+  const PAD_L = 24, PAD_R = 50, PAD_T = 24, PAD_B = 40;
 
   // For level 0: expand @ref nodes as sub-groups
   const subGroups = {}; // nodeId -> { cls, W, H, svgContent }
@@ -271,7 +271,7 @@ function renderFlatSVG(text) {
   const {rankdir, nodes, edges} = parsed;
   if (!nodes.length) return null;
   const g = new dagre.graphlib.Graph();
-  g.setGraph({rankdir, nodesep:40, ranksep:52, marginx:18, marginy:14});
+  g.setGraph({rankdir, nodesep:40, ranksep:52, marginx:24, marginy:20});
   g.setDefaultEdgeLabel(() => ({}));
   const dims = {};
   for (const n of nodes) {
@@ -289,7 +289,7 @@ function renderFlatSVG(text) {
   for (const e of edges) { if (g.hasNode(e.from)&&g.hasNode(e.to)) g.setEdge(e.from,e.to,{label:e.label}); }
   try { dagre.layout(g); } catch { return null; }
   const gi = g.graph();
-  const W = r1((gi.width||150)+36), H = r1((gi.height||80)+28);
+  const W = r1((gi.width||150)+60), H = r1((gi.height||80)+50);
   let edg='', nds='';
   const sth = theme();
   edges.forEach((e,i) => {
