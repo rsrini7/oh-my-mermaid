@@ -208,11 +208,11 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
       const PAD = 12;
       const boxW = sg.W * fs + PAD * 2, boxH = sg.H * fs + PAD * 2;
       const clipId = `${uid}clip_${n.id}`;
-      svg += `<defs><clipPath id="${clipId}"><rect x="-2" y="-16" width="${r1(boxW+4)}" height="${r1(boxH+18)}" rx="6"/></clipPath></defs>`;
+      const _slW = Math.min(boxW - 6, tw(fmtLabel(sg.cls), '600 9px "Plus Jakarta Sans",Inter,system-ui') + 14);
+      svg += `<defs><clipPath id="${clipId}"><rect x="-2" y="-16" width="${r1(Math.max(boxW, _slW + 7) + 4)}" height="${r1(boxH + 18)}" rx="6"/></clipPath></defs>`;
       svg += `<g class="grp-node" clip-path="url(#${clipId})" onclick="event.stopPropagation();window.__openSb('${scopedId}')" data-cls="${scopedId}" data-depth="${level+1}" transform="translate(${nx},${ny})">`;
       svg += `<rect class="grp-border" width="${r1(boxW)}" height="${r1(boxH)}" rx="5"
         fill="${th.subFill}" stroke="${refSubStroke}" stroke-width="2"/>`;
-      const _slW = tw(fmtLabel(sg.cls), '600 9px "Plus Jakarta Sans",Inter,system-ui') + 12;
       svg += `<rect class="grp-label-top grp-label-bg" x="5" y="-7" width="${_slW}" height="14" rx="2" fill="${th.subFill}" opacity="1"/>`;
       svg += `<text class="grp-label-top" x="10" y="2" font-family="&quot;Plus Jakarta Sans&quot;,Inter,system-ui" font-size="9" font-weight="600"
         fill="${th.subLabelFill}" letter-spacing="0.05em">${esc(fmtLabel(sg.cls))}</text>`;
@@ -433,7 +433,7 @@ function applyTransform() {
   const targetPx = 13;
   const fs = Math.min(72, Math.max(10, targetPx / vpScale));
   const fsStr = (Math.round(fs * 10) / 10).toString();
-  const labelFill = isDark() ? (vpScale < 0.5 ? '#ccc' : '#cbd5e1') : (vpScale < 0.5 ? '#333' : '#475569');
+  const labelFill = getComputedStyle(document.documentElement).getPropertyValue(vpScale < 0.5 ? '--svg-label-fill-dim' : '--svg-label-fill').trim() || (isDark() ? '#cbd5e1' : '#475569');
   document.querySelectorAll('#canvas .grp-label-top').forEach(el => {
     if (el.tagName === 'text') {
       el.setAttribute('font-size', fsStr);
@@ -846,7 +846,7 @@ function openSidebar(cls, origCls) {
         <button class="sb-diagram-tab active" onclick="window.__showDiagramTab('diagram')">Diagram</button>
         <button class="sb-diagram-tab" onclick="window.__showDiagramTab('code')">Code</button>
       </div>
-      <div class="sb-diagram-view">${svg || '<div style="padding:16px;color:#666">Could not render diagram</div>'}</div>
+      <div class="sb-diagram-view">${svg || '<div style="padding:16px;color:var(--text-muted)">Could not render diagram</div>'}</div>
       <div class="sb-code-view" style="display:none"><pre class="sb-code-pre">${codeHtml}</pre></div>
     `;
   // Timeline slider if history exists
@@ -900,7 +900,8 @@ function openSidebar(cls, origCls) {
     } catch {}
   }
   const complexity = diagramNodes > 15 ? 'high' : diagramNodes > 8 ? 'medium' : 'low';
-  const complexityColor = complexity === 'high' ? '#ef4444' : complexity === 'medium' ? '#fbbf24' : '#22c55e';
+  const _cv = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const complexityColor = complexity === 'high' ? (_cv('--error') || '#ef4444') : complexity === 'medium' ? (_cv('--warning') || '#fbbf24') : (_cv('--success') || '#22c55e');
   html += `<div class="sb-sec"><div class="sb-sec-title">Metrics</div><div class="sb-metrics">
     <span class="sb-metric"><span class="sb-metric-value">${coverage}%</span> coverage</span>
     <span class="sb-metric"><span class="sb-metric-value">${totalWords}</span> words</span>
@@ -1085,7 +1086,7 @@ function buildCanvas(classes, classesData, refsData) {
     innerSVG += `<g class="grp-node" data-cls="${esc(g.cls)}" data-depth="0" transform="translate(${tx},${ty})" onclick="event.stopPropagation();window.__openSb('${esc(g.cls)}')">`;
     innerSVG += `<rect class="grp-border" width="${g.W}" height="${g.H}" rx="8"
       fill="${th.groupFill}" stroke="${th.groupStroke}" stroke-width="2"/>`;
-    const _lblW = tw(fmtLabel(g.cls), '600 10px "Plus Jakarta Sans",Inter,system-ui') + 14;
+    const _lblW = Math.min(g.W - 8, tw(fmtLabel(g.cls), '600 10px "Plus Jakarta Sans",Inter,system-ui') + 16);
     innerSVG += `<rect class="grp-label-top grp-label-bg" x="6" y="-10" width="${_lblW}" height="20" rx="2" fill="${th.groupFill}" opacity="1"/>`;
     innerSVG += `<text class="grp-label-top" x="12" y="3" font-family="&quot;Plus Jakarta Sans&quot;,Inter,system-ui" font-size="10" font-weight="600"
       fill="${th.grpLabelFill}" letter-spacing="0.05em">${esc(fmtLabel(g.cls))}</text>`;
@@ -1112,7 +1113,7 @@ function postRender() {
     if (existing) existing.remove();
     defs.insertAdjacentHTML('beforeend',
       '<filter id="glow"><feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur"/>' +
-      '<feFlood flood-color="#818cf8" flood-opacity="0.4" result="color"/>' +
+      '<feFlood flood-color="' + (getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#818cf8') + '" flood-opacity="0.4" result="color"/>' +
       '<feComposite in="color" in2="blur" operator="in" result="shadow"/>' +
       '<feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'
     );
@@ -1679,7 +1680,7 @@ window.__scrubTimeline = function(idx) {
   }
   if (diagramView) {
     const svg = renderFlatSVG(v.diagram);
-    diagramView.innerHTML = svg || '<div style="padding:16px;color:#666">Could not render diagram</div>';
+    diagramView.innerHTML = svg || '<div style="padding:16px;color:var(--text-muted)">Could not render diagram</div>';
   }
   if (codeView) {
     codeView.querySelector('pre').innerHTML = highlightMermaid(v.diagram);
@@ -1693,7 +1694,7 @@ window.__scrubTimeline = function(idx) {
 window.__validateElement = async function(cls) {
   const container = document.getElementById('sb-validate-results');
   if (!container) return;
-  container.innerHTML = '<div style="padding:4px 0;font-size:11px;color:#666">Validating…</div>';
+  container.innerHTML = '<div style="padding:4px 0;font-size:11px;color:var(--text-muted)">Validating…</div>';
   try {
     const res = await fetch(`/api/class/${encodeURIComponent(cls)}/validate`);
     const data = await res.json();
@@ -1720,7 +1721,7 @@ window.__validateElement = async function(cls) {
     }
     container.innerHTML = html;
   } catch {
-    container.innerHTML = '<div style="padding:4px 0;font-size:11px;color:#ef4444">Validation failed</div>';
+    container.innerHTML = '<div style="padding:4px 0;font-size:11px;color:var(--error)">Validation failed</div>';
   }
 };
 window.toggleMobileNav = function() {
@@ -1750,7 +1751,7 @@ window.__toggleDiff = async function(cls) {
     const res = await fetch(`/api/class/${encodeURIComponent(cls)}/diff`);
     const diff = await res.json();
     if (!diff.has_changes) {
-      diagramView.innerHTML = (renderFlatSVG(classesData[cls]?.diagram) || '') + '<div style="padding:8px;text-align:center;color:#666;font-size:12px">No changes detected</div>';
+      diagramView.innerHTML = (renderFlatSVG(classesData[cls]?.diagram) || '') + '<div style="padding:8px;text-align:center;color:var(--text-muted);font-size:12px">No changes detected</div>';
       if (btn) { btn.textContent = 'No Changes'; btn.disabled = false; }
       return;
     }
@@ -1760,10 +1761,10 @@ window.__toggleDiff = async function(cls) {
     if (!svg) return;
     const addedNodes = new Set(diff.added_nodes || []);
     const diffStyles = `<defs><style>
-      .diff-added .nshape { stroke: #22c55e !important; stroke-width: 3px !important; filter: drop-shadow(0 0 4px rgba(34,197,94,0.5)); }
-      .diff-removed .nshape { stroke: #ef4444 !important; stroke-width: 3px !important; stroke-dasharray: 6 3 !important; opacity: 0.6; }
-      .diff-added text { fill: #86efac !important; }
-      .diff-removed text { fill: #fca5a5 !important; }
+      .diff-added .nshape { stroke: var(--success) !important; stroke-width: 3px !important; filter: drop-shadow(0 0 4px rgba(34,197,94,0.5)); }
+      .diff-removed .nshape { stroke: var(--error) !important; stroke-width: 3px !important; stroke-dasharray: 6 3 !important; opacity: 0.6; }
+      .diff-added text { fill: var(--success-text) !important; }
+      .diff-removed text { fill: var(--error-text) !important; }
     </style></defs>`;
     svg = svg.replace(/^(<svg[^>]*>)/, '$1' + diffStyles);
     for (const nodeId of addedNodes) {
@@ -1772,8 +1773,8 @@ window.__toggleDiff = async function(cls) {
     }
     let html = svg;
     if (diff.removed_nodes?.length) {
-      const removedHtml = diff.removed_nodes.map(n => `<span style="color:#ef4444;text-decoration:line-through">${esc(n)}</span>`).join(', ');
-      html += `<div style="padding:8px 16px;font-size:11px;color:#999;border-top:1px solid #222">Removed: ${removedHtml}</div>`;
+      const removedHtml = diff.removed_nodes.map(n => `<span style="color:var(--error);text-decoration:line-through">${esc(n)}</span>`).join(', ');
+      html += `<div style="padding:8px 16px;font-size:11px;color:var(--text-dim);border-top:1px solid var(--border-subtle)">Removed: ${removedHtml}</div>`;
     }
     diagramView.innerHTML = html;
   } catch {
@@ -1860,7 +1861,7 @@ window.toggleGraphView = async function() {
   }
 
   if (!refGraph.length) {
-    canvasEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#666" font-size="14">No cross-perspective references found</text>';
+    canvasEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="' + (getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#666') + '" font-size="14">No cross-perspective references found</text>';
     return;
   }
   renderGraphView(refGraph);
@@ -1868,7 +1869,7 @@ window.toggleGraphView = async function() {
 
 function renderGraphView(refs) {
   if (!refs.length) {
-    canvasEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#666" font-size="14">No cross-perspective references found</text>';
+    canvasEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="' + (getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#666') + '" font-size="14">No cross-perspective references found</text>';
     return;
   }
 
