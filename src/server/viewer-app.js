@@ -920,6 +920,22 @@ window.__openSb = function(cls) {
       _savedViewport = null;
     }
   }
+  // If in network mode, exit network mode first
+  if (_networkMode) {
+    _networkMode = false;
+    const btn = document.getElementById('network-btn');
+    if (btn) btn.classList.remove('active');
+    canvasWrap.classList.remove('network-mode');
+    if (_networkSimulation) { _networkSimulation.stop(); _networkSimulation = null; }
+    rebuildCanvas();
+    if (_savedViewport) {
+      vpX = _savedViewport.vpX;
+      vpY = _savedViewport.vpY;
+      vpScale = _savedViewport.vpScale;
+      applyTransform();
+      _savedViewport = null;
+    }
+  }
 
   var dataKey = resolveDataKey(cls);
   if (!dataKey || !classesData[dataKey]) return;
@@ -2188,6 +2204,258 @@ function renderGraphView(refs) {
   canvasEl.innerHTML = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="overflow:visible">${svg}</svg>`;
   svgW = W; svgH = H;
   requestAnimationFrame(centerView);
+}
+
+// ── D3 Force-Directed Network Graph ─────────────────────
+let _networkMode = false;
+let _networkSimulation = null;
+
+// Open sidebar without exiting current mode (graph or network)
+function __openSbKeepMode(cls) {
+  var dataKey = resolveDataKey(cls);
+  if (!dataKey || !classesData[dataKey]) return;
+  selectedCls = cls;
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('data-nav') === cls);
+  });
+  openSidebar(dataKey, cls);
+  loadFlows(cls).then(() => renderFlowBar(cls));
+}
+
+window.toggleNetworkView = function() {
+  const btn = document.getElementById('network-btn');
+  if (_networkMode) {
+    _networkMode = false;
+    if (btn) btn.classList.remove('active');
+    canvasWrap.classList.remove('network-mode');
+    if (_networkSimulation) { _networkSimulation.stop(); _networkSimulation = null; }
+    rebuildCanvas();
+    if (_savedViewport) {
+      vpX = _savedViewport.vpX;
+      vpY = _savedViewport.vpY;
+      vpScale = _savedViewport.vpScale;
+      applyTransform();
+      _savedViewport = null;
+    }
+    return;
+  }
+
+  // Exit graph mode if active
+  if (_graphMode) {
+    _graphMode = false;
+    document.getElementById('graph-btn')?.classList.remove('active');
+  }
+
+  _savedViewport = { vpX, vpY, vpScale };
+  _networkMode = true;
+  if (btn) btn.classList.add('active');
+  canvasWrap.classList.add('network-mode');
+
+  renderNetworkGraph();
+};
+
+function renderNetworkGraph() {
+  // Build node + edge data from all perspectives
+  const nodeMap = new Map(); // id -> { id, label, perspective, isChild, connections }
+  const edgeSet = new Set();
+  const edges = [];
+
+  // Color palette for perspectives
+  const palette = ['#818cf8','#f472b6','#34d399','#fbbf24','#fb923c','#a78bfa','#67e8f9','#f87171'];
+  const perspColor = {};
+  classes.forEach((c, i) => { perspColor[c] = palette[i % palette.length]; });
+
+  // Add perspective nodes
+  classes.forEach(cls => {
+    nodeMap.set(cls, { id: cls, label: fmtLabel(cls), perspective: cls, isChild: false, connections: 0 });
+  });
+
+  // Parse each perspective's diagram to find edges and child nodes
+  classes.forEach(cls => {
+    const data = classesData[cls];
+    if (!data?.diagram) return;
+    const parsed = parseFlowchart(data.diagram);
+
+    // Add child nodes
+    parsed.nodes.forEach(n => {
+      const childPath = cls + '/' + n.id;
+      if (!nodeMap.has(childPath)) {
+        nodeMap.set(childPath, { id: childPath, label: fmtLabel(n.id), perspective: cls, isChild: true, connections: 0 });
+      }
+    });
+
+    // Add edges
+    parsed.edges.forEach(e => {
+      const fromPath = cls + '/' + e.from;
+      const toPath = cls + '/' + e.to;
+      const key = fromPath + '->' + toPath;
+      if (!edgeSet.has(key)) {
+        edgeSet.add(key);
+        edges.push({ source: fromPath, target: toPath, label: e.label });
+        const fromNode = nodeMap.get(fromPath);
+        const toNode = nodeMap.get(toPath);
+        if (fromNode) fromNode.connections++;
+        if (toNode) toNode.connections++;
+      }
+    });
+
+    // Add edge from perspective to its children
+    parsed.nodes.forEach(n => {
+      const childPath = cls + '/' + n.id;
+      const key = cls + '->' + childPath;
+      if (!edgeSet.has(key) && nodeMap.has(childPath)) {
+        edgeSet.add(key);
+        edges.push({ source: cls, target: childPath, label: '' });
+        const pNode = nodeMap.get(cls);
+        const cNode = nodeMap.get(childPath);
+        if (pNode) pNode.connections++;
+        if (cNode) cNode.connections++;
+      }
+    });
+
+    // Cross-perspective edges: if a node ID matches a child of another perspective
+    parsed.nodes.forEach(n => {
+      classes.forEach(otherPersp => {
+        if (otherPersp === cls) return;
+        const otherChildren = childrenByPerspective[otherPersp] || [];
+        if (otherChildren.includes(n.id)) {
+          const fromPath = cls + '/' + n.id;
+          const toPath = otherPersp + '/' + n.id;
+          const key = fromPath + '=>' + toPath;
+          if (!edgeSet.has(key) && nodeMap.has(fromPath) && nodeMap.has(toPath)) {
+            edgeSet.add(key);
+            edges.push({ source: fromPath, target: toPath, label: 'shared' });
+          }
+        }
+      });
+    });
+  });
+
+  const nodes = Array.from(nodeMap.values());
+  if (!nodes.length) {
+    canvasEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="var(--text-muted)" font-size="14">No data for network graph</text>';
+    return;
+  }
+
+  // D3 force simulation
+  const width = canvasWrap.clientWidth;
+  const height = canvasWrap.clientHeight;
+
+  const simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(80))
+    .force('charge', d3.forceManyBody().strength(-200))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 10));
+
+  _networkSimulation = simulation;
+
+  function nodeRadius(d) {
+    if (!d.isChild) return 20; // perspective nodes
+    return Math.max(8, Math.min(16, 6 + d.connections * 2));
+  }
+
+  // Create SVG
+  const svg = d3.select(canvasEl).html('').append('svg')
+    .attr('class', 'network-svg')
+    .attr('width', width)
+    .attr('height', height)
+    .style('overflow', 'visible');
+
+  // Zoom
+  const g = svg.append('g');
+  const zoomBehavior = d3.zoom()
+    .scaleExtent([0.1, 4])
+    .filter((event) => {
+      // Allow zoom/pan only on background, not on nodes
+      if (event.target.closest('.network-node')) return false;
+      return true;
+    })
+    .on('zoom', (event) => g.attr('transform', event.transform));
+  svg.call(zoomBehavior);
+
+  // Edges
+  const link = g.append('g').selectAll('line')
+    .data(edges).join('line')
+    .attr('class', 'network-edge')
+    .attr('stroke', 'var(--svg-edge-0)')
+    .attr('stroke-width', 1.5);
+
+  // Edge labels
+  const linkLabel = g.append('g').selectAll('text')
+    .data(edges.filter(e => e.label)).join('text')
+    .attr('class', 'network-label')
+    .text(d => d.label);
+
+  // Nodes
+  const node = g.append('g').selectAll('g')
+    .data(nodes).join('g')
+    .attr('class', 'network-node')
+    .style('cursor', 'pointer');
+
+  // D3 drag for moving nodes
+  node.call(d3.drag()
+    .on('start', (event, d) => {
+      event.sourceEvent.stopPropagation();
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x; d.fy = d.y;
+    })
+    .on('drag', (event, d) => {
+      d.fx = event.x; d.fy = event.y;
+    })
+    .on('end', (event, d) => {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null; d.fy = null;
+    }));
+
+  // Click detection — use pointerdown/pointerup to track if mouse moved
+  let _clickStartX = 0, _clickStartY = 0, _isClick = false;
+  node.on('pointerdown', (event) => {
+    _clickStartX = event.clientX;
+    _clickStartY = event.clientY;
+    _isClick = true;
+  });
+  node.on('pointermove', (event) => {
+    const dx = event.clientX - _clickStartX;
+    const dy = event.clientY - _clickStartY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      _isClick = false;
+    }
+  });
+  node.on('click', (event, d) => {
+    if (!_isClick) return;
+    event.stopPropagation();
+    event.preventDefault();
+    __openSbKeepMode(d.id);
+  });
+
+  node.append('circle')
+    .attr('r', d => nodeRadius(d))
+    .attr('fill', d => perspColor[d.perspective] || '#818cf8')
+    .attr('stroke', d => d.isChild ? 'var(--border)' : 'var(--text)')
+    .attr('stroke-width', d => d.isChild ? 1.5 : 2.5)
+    .attr('fill-opacity', d => d.isChild ? 0.7 : 1);
+
+  node.append('text')
+    .attr('dy', d => nodeRadius(d) + 14)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', d => d.isChild ? '9px' : '11px')
+    .attr('fill', 'var(--text-body)')
+    .text(d => d.label);
+
+  // Tick
+  simulation.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y);
+
+    linkLabel
+      .attr('x', d => (d.source.x + d.target.x) / 2)
+      .attr('y', d => (d.source.y + d.target.y) / 2);
+
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
 }
 
 // ── export ────────────────────────────────────────────────

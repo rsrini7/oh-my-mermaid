@@ -128,6 +128,7 @@ The web viewer (`omm view`) includes:
 | **Export** | Download diagrams as SVG, PNG, or self-contained HTML with project title |
 | **Flow animation** | Click flow chips to animate paths through the diagram (edges glow, nodes highlight) |
 | **Relationship graph** | Bird's-eye view of cross-perspective connections (◈ button) |
+| **Network graph** | D3 force-directed view of all elements and connections (⬡ button) |
 | **Version history** | Timeline slider to scrub through past diagram versions |
 | **Keyboard shortcuts** | `/` search, `F` fit, `T` theme, `←→` navigate, `Esc` close |
 | **Resizable panels** | Drag to resize left nav and right sidebar |
@@ -191,6 +192,29 @@ steps:
 ### Auto-generation
 
 The `/omm-scan` skill generates flows automatically during scan. It traces paths from entry points to terminal nodes and creates 2-5 flows per perspective.
+
+## Graph Views
+
+The viewer has two graph visualization modes:
+
+### Relationship Graph (◈ button)
+
+- Uses dagre hierarchical layout (left-to-right)
+- Shows cross-perspective connections only
+- Static — click nodes to navigate
+- Best for: understanding perspective overlap, documentation
+
+### Network Graph (⬡ button)
+
+- Uses D3 force-directed layout
+- Shows ALL elements (perspectives + children) and their connections
+- Interactive — drag nodes to rearrange, zoom/pan
+- Animated — nodes settle into position organically
+- Color-coded by perspective
+- Size-coded by connection count
+- Best for: exploration, finding clusters, presentations
+
+Both views are toggled with their respective buttons in the floating controls.
 
 ## HTML Export
 

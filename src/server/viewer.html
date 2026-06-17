@@ -14,6 +14,7 @@
   })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -429,9 +430,36 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); disp
   padding: 4px 6px;
   backdrop-filter: blur(8px);
 }
-.hbtn { background: none; border: 1px solid var(--border-hi); color: var(--text-mid); height: 26px; min-width: 26px; padding: 0 8px; border-radius: 5px; cursor: pointer; font-size: 13px; font-family: var(--font); transition: border-color .12s, color .12s; }
-.hbtn:hover { border-color: var(--text-muted); color: var(--text); }
-.hbtn.active { border-color: var(--accent); color: var(--accent); }
+.hbtn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-mid);
+  height: 28px;
+  min-width: 28px;
+  padding: 0 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--font);
+  transition: all .15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.hbtn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--surface3);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(129, 140, 248, 0.15);
+}
+.hbtn:active { transform: translateY(0); }
+.hbtn.active {
+  border-color: var(--accent);
+  color: var(--bg);
+  background: var(--accent);
+  box-shadow: 0 2px 8px rgba(129, 140, 248, 0.3);
+}
 #zoom-label { font-size: 11px; color: var(--text-dim); width: 38px; text-align: center; font-family: var(--mono); }
 .float-controls.sidebar-open { right: calc(var(--sidebar-w) + 12px); }
 @media (max-width: 768px) { .float-controls.sidebar-open { right: 12px; } }
@@ -671,6 +699,17 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); disp
   #canvas-wrap.flowing .edge-path.flow-lit { animation: none; }
 }
 
+/* D3 Network Graph */
+#canvas-wrap.network-mode #canvas { pointer-events: none; }
+.network-svg { cursor: grab; }
+.network-svg:active { cursor: grabbing; }
+.network-node { cursor: pointer; pointer-events: all; }
+.network-node circle { transition: stroke .15s, filter .15s; }
+.network-node:hover circle { stroke: var(--text) !important; stroke-width: 2.5px; filter: drop-shadow(0 0 6px rgba(255,255,255,0.5)); }
+.network-node text { pointer-events: none; font-family: 'Plus Jakarta Sans',Inter,system-ui; font-weight: 600; }
+.network-edge { stroke-opacity: 0.4; pointer-events: none; }
+.network-label { font-family: var(--mono); font-size: 9px; fill: var(--text-muted); pointer-events: none; }
+
 #mobile-nav-btn { display: none; }
 #mobile-overlay { display: none; }
 
@@ -744,13 +783,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); disp
 <div id="mobile-overlay" onclick="toggleMobileNav()"></div>
 <div id="canvas-wrap">
   <div class="float-controls">
-    <button class="hbtn" onclick="zoomOut()">−</button>
+    <button class="hbtn" onclick="zoomOut()" title="Zoom out">−</button>
     <span id="zoom-label">70%</span>
-    <button class="hbtn" onclick="zoomIn()">+</button>
-    <button class="hbtn" onclick="resetView()" style="font-size:11px">fit</button>
-    <button class="hbtn" id="theme-btn" onclick="toggleTheme()" style="font-size:13px">○</button>
+    <button class="hbtn" onclick="zoomIn()" title="Zoom in">+</button>
+    <button class="hbtn" onclick="resetView()" title="Fit to view" style="font-size:11px">fit</button>
+    <button class="hbtn" id="theme-btn" onclick="toggleTheme()" title="Toggle dark/light theme" style="font-size:13px">○</button>
     <button class="hbtn" id="export-btn" onclick="exportDiagram()" title="Export diagram" style="font-size:12px">↓</button>
     <button class="hbtn" id="graph-btn" onclick="toggleGraphView()" title="Relationship graph" style="font-size:11px">◈</button>
+    <button class="hbtn" id="network-btn" onclick="toggleNetworkView()" title="Network graph (D3 force-directed)" style="font-size:13px">⬡</button>
     <button class="hbtn" id="home-btn" onclick="window.location='/'" title="Back to projects" style="font-size:13px;display:none">⌂</button>
   </div>
   <div id="canvas"></div>
