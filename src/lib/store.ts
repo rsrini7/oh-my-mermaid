@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
-import { VALID_FIELDS, FIELD_FILES, type Field, type ClassMeta, type ClassData, type OmmConfig } from '../types.js';
+import { VALID_FIELDS, FIELD_FILES, type Field, type ClassMeta, type ClassData, type OmmConfig, type FlowsFile, type FlowDef } from '../types.js';
 import { updateMeta } from './meta.js';
 
 const OMM_DIR = '.omm';
@@ -372,4 +372,34 @@ export function showClass(className: string, cwd?: string): ClassData | null {
     note: readField(className, 'note', cwd) ?? undefined,
     meta: readMeta(className, cwd) ?? undefined,
   };
+}
+
+// --- Flows ---
+
+const FLOWS_FILE = 'flows.yaml';
+
+export function readFlows(elementPath: string, cwd?: string): FlowDef[] {
+  const dir = path.join(getOmmDir(cwd), elementPath);
+  const filePath = path.join(dir, FLOWS_FILE);
+  if (!fs.existsSync(filePath)) return [];
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const parsed = YAML.parse(raw) as FlowsFile;
+    return parsed?.flows ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeFlows(elementPath: string, flows: FlowDef[], cwd?: string): void {
+  ensureOmmForWrite(cwd);
+  const dir = path.join(getOmmDir(cwd), elementPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  const filePath = path.join(dir, FLOWS_FILE);
+  const data: FlowsFile = { flows };
+  fs.writeFileSync(filePath, YAML.stringify(data), 'utf-8');
+  process.stderr.write(`wrote ${elementPath}/${FLOWS_FILE} (${flows.length} flows)
+`);
 }

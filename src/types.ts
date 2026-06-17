@@ -88,3 +88,18 @@ export interface ValidationResult {
   valid: boolean;
   issues: ValidationIssue[];
 }
+
+export interface FlowStep {
+  node?: string;
+  edge?: string;  // format: "from->to"
+}
+
+export interface FlowDef {
+  name: string;
+  description?: string;
+  steps: FlowStep[];
+}
+
+export interface FlowsFile {
+  flows: FlowDef[];
+}

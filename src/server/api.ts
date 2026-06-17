@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import fs from 'node:fs';
 import * as nodePath from 'node:path';
-import { listClasses, showClass, readMeta, readField, listNodes, showNode, listProjects, getOmmDir, isArchRepo } from '../lib/store.js';
+import { listClasses, showClass, readMeta, readField, listNodes, showNode, listProjects, getOmmDir, isArchRepo, readFlows } from '../lib/store.js';
 import { diffMermaid } from '../lib/diff.js';
 import { validateDiagram } from '../lib/validate.js';
 import { getIncomingRefs, getOutgoingRefs, buildRefGraph } from '../lib/refs.js';
@@ -64,6 +64,14 @@ export function handleApi(req: IncomingMessage, res: ServerResponse): boolean {
     const incoming = getIncomingRefs(className);
     const outgoing = getOutgoingRefs(className);
     json(res, { incoming, outgoing });
+    return true;
+  }
+
+  // GET /api/class/:name/flows
+  const flowsMatch = path.match(/^\/api\/class\/([^/]+)\/flows$/);
+  if (flowsMatch) {
+    const className = flowsMatch[1];
+    json(res, { element: className, flows: readFlows(className) });
     return true;
   }
 

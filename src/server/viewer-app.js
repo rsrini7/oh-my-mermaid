@@ -6,6 +6,126 @@ import { setupExport } from './viewer/export.js';
 // theme() shim — returns themeColors() for backward compat
 function theme() { return themeColors(); }
 
+// ── flow animation state ─────────────────────────────────
+let _flowsData = {};  // elementPath -> FlowDef[]
+let _activeFlow = null;  // currently active flow name
+
+async function loadFlows(elementPath) {
+  try {
+    const res = await api(`/api/class/${encodeURIComponent(elementPath)}/flows`);
+    _flowsData[elementPath] = res?.flows || [];
+  } catch {
+    _flowsData[elementPath] = [];
+  }
+}
+
+function renderFlowBar(elementPath) {
+  const bar = document.getElementById('flow-bar');
+  if (!bar) return;
+  const flows = _flowsData[elementPath] || [];
+  // Clear existing chips (keep label)
+  bar.innerHTML = '<span class="flow-bar-label">Flows</span>';
+  if (flows.length === 0) {
+    bar.classList.remove('has-flows');
+    deactivateFlow();
+    return;
+  }
+  bar.classList.add('has-flows');
+  for (const f of flows) {
+    const chip = document.createElement('button');
+    chip.className = 'flow-chip' + (_activeFlow === f.name ? ' active' : '');
+    chip.textContent = f.name;
+    chip.title = f.description || f.name;
+    chip.onclick = () => toggleFlow(elementPath, f.name);
+    bar.appendChild(chip);
+  }
+}
+
+function toggleFlow(elementPath, flowName) {
+  if (_activeFlow === flowName) {
+    deactivateFlow();
+    return;
+  }
+  const flows = _flowsData[elementPath] || [];
+  const flow = flows.find(f => f.name === flowName);
+  if (!flow) return;
+  _activeFlow = flowName;
+
+  const canvasWrap = document.getElementById('canvas-wrap');
+  canvasWrap.classList.add('flowing');
+
+  // Collect node and edge IDs to highlight
+  const litNodes = new Set();
+  const litEdges = new Set();
+  for (const step of flow.steps) {
+    if (step.node) litNodes.add(step.node);
+    if (step.edge) {
+      const [from, to] = step.edge.split('->');
+      if (from && to) litEdges.add(`${from}->${to}`);
+    }
+  }
+
+  // Highlight nodes
+  document.querySelectorAll('#canvas .reg-node, #canvas .grp-node').forEach(el => {
+    const cls = el.getAttribute('data-cls');
+    // Match by full path or short name
+    const shortName = cls ? cls.split('/').pop() : '';
+    if (litNodes.has(cls) || litNodes.has(shortName)) {
+      el.classList.add('flow-lit');
+    } else {
+      el.classList.remove('flow-lit');
+    }
+  });
+
+  // Highlight edges — match by exact from->to key or by node membership
+  document.querySelectorAll('#canvas .edge-path').forEach(el => {
+    const from = el.getAttribute('data-from');
+    const to = el.getAttribute('data-to');
+    const key = `${from}->${to}`;
+    const fromShort = from ? from.split('/').pop() : '';
+    const toShort = to ? to.split('/').pop() : '';
+    const keyShort = `${fromShort}->${toShort}`;
+    const isLit = litEdges.has(key) || litEdges.has(keyShort) ||
+      (litNodes.has(from) && litNodes.has(to)) ||
+      (litNodes.has(fromShort) && litNodes.has(toShort));
+    if (isLit) {
+      el.classList.add('flow-lit');
+    } else {
+      el.classList.remove('flow-lit');
+    }
+  });
+  // Highlight edge labels using data-from/data-to attributes
+  document.querySelectorAll('#canvas .edge-label').forEach(el => {
+    const from = el.getAttribute('data-from');
+    const to = el.getAttribute('data-to');
+    const key = `${from}->${to}`;
+    const fromShort = from ? from.split('/').pop() : '';
+    const toShort = to ? to.split('/').pop() : '';
+    const keyShort = `${fromShort}->${toShort}`;
+    const isLit = litEdges.has(key) || litEdges.has(keyShort) ||
+      (litNodes.has(from) && litNodes.has(to)) ||
+      (litNodes.has(fromShort) && litNodes.has(toShort));
+    if (isLit) {
+      el.classList.add('flow-lit');
+    } else {
+      el.classList.remove('flow-lit');
+    }
+  });
+
+  // Update chip active state
+  document.querySelectorAll('.flow-chip').forEach(chip => {
+    chip.classList.toggle('active', chip.textContent === flowName);
+  });
+}
+
+function deactivateFlow() {
+  _activeFlow = null;
+  const canvasWrap = document.getElementById('canvas-wrap');
+  canvasWrap.classList.remove('flowing');
+  document.querySelectorAll('.flow-lit').forEach(el => el.classList.remove('flow-lit'));
+  document.querySelectorAll('.flow-chip').forEach(chip => chip.classList.remove('active'));
+}
+
 // ── render one class group (recursive) ────────────────────
 // _expandedGlobal prevents same class from expanding in multiple branches
 let _expandedGlobal = new Set();
@@ -186,7 +306,7 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
     if (e.label) {
       const lw = tw(e.label,'10px Inter')+12;
       const mx=r1(mid.x), my=r1(mid.y);
-      edgeLabels += `<g class="edge-label${hoverClass}" opacity="${opacity}"><rect x="${mx-lw/2}" y="${my-8}" width="${lw}" height="16" rx="3" fill="${th.edgeLabelBg}"/>
+      edgeLabels += `<g class="edge-label${hoverClass}" opacity="${opacity}" data-from="${esc(e.from)}" data-to="${esc(e.to)}"><rect x="${mx-lw/2}" y="${my-8}" width="${lw}" height="16" rx="3" fill="${th.edgeLabelBg}"/>
         <text x="${mx}" y="${my+4}" text-anchor="middle" font-family="Inter,system-ui" font-size="10" fill="${th.edgeLabelText}">${esc(e.label)}</text></g>`;
     }
   });
@@ -815,6 +935,8 @@ window.__openSb = function(cls) {
   if (activeNav) activeNav.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   var sidebarAlreadyOpen = sidebar.classList.contains('open');
   openSidebar(dataKey, cls);
+  // Load and render flows for this element
+  loadFlows(cls).then(() => renderFlowBar(cls));
   if (sidebarAlreadyOpen) {
     focusGroup(cls);
   } else {
@@ -969,6 +1091,9 @@ function closeSidebar() {
   document.querySelectorAll('#canvas [data-cls].focus-exempt').forEach(el => el.classList.remove('focus-exempt'));
   selectedCls=null;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  deactivateFlow();
+  const flowBar = document.getElementById('flow-bar');
+  if (flowBar) flowBar.classList.remove('has-flows');
 }
 
 /** Navigate to next/prev element (arrow key support) */
@@ -1388,6 +1513,10 @@ async function init() {
       parentMap[child].push(persp);
     }
   }
+
+  // Pre-load flows for all perspectives
+  const flowLoads = classes.map(c => loadFlows(c));
+  await Promise.all(flowLoads);
 
   // Pre-load nested element data for all children
   const nodeLoads = [];
