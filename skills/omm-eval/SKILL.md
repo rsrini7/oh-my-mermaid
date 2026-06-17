@@ -52,8 +52,15 @@ omm validate --rules        # one-liner list
 # Document the @class-name cross-reference convention
 omm ref-syntax
 
+# List @refs in a diagram with pass/fail status
+omm diagram-refs <element>
+omm diagram-refs <element> --json
+
 # Show lowest-scoring elements with gap analysis
 omm eval --suggest
+
+# Generate feedback report to share with maintainer
+omm feedback --include "your suggestion"
 ```
 
 ## Step 2: Run Initial Evaluation

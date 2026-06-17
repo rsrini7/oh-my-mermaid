@@ -94,13 +94,15 @@ omm diff <element>                 # Show diagram diff (added/removed nodes)
 omm refs <element>                 # Show incoming/outgoing references
 omm export <element> [--format svg|png|html] [-o file]  # Export diagram
 omm flows <element> [add|remove] [name]           # Manage flow animations
-omm eval [--json] [--threshold <score>] [--explain <element>] [--suggest]
+omm eval [--json] [--threshold <score>] [--explain <el>] [--suggest] [--explain-json]
                                              # Evaluate documentation quality
 omm validate [--explain | --rules]             # Validate diagrams with rule docs
 omm ref-syntax                                 # Document the @class-name convention
+omm diagram-refs <path> [--json]               # List @refs in diagram with pass/fail status
 omm show <element> --type                      # Show element type (perspective/leaf/group)
-omm incremental --mark <p> --recursive        # Mark perspective + all children
+omm incremental --mark <p> [--recursive] [--explain <el>]  # Mark + explain
 omm feedback [--format json] [--include "msg"] # Generate feedback report in .omm/
+omm help <cmd>                                # Drill down to per-command help
 omm tag <element> [add|remove|set|clear] [tags] # Manage element tags
 omm push [--to repo] [--commit]    # Push to architecture repository
 omm pull [--from repo] [--all]     # Pull from architecture repository

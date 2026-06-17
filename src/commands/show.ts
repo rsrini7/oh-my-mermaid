@@ -105,8 +105,15 @@ function printType(data: any): void {
     process.stdout.write(`  children: ${childNames.length} (${childNames.join(', ')})\n`);
   }
   process.stdout.write(`  score: ${data.meta?.update_count ?? 0} updates\n`);
+  printLeafDiagramTip(type);
+}
+
+export function printLeafDiagramTip(type: string): void {
   process.stdout.write(`\nTip: For best eval scores, every element benefits from a diagram.\n`);
   process.stdout.write(`     Even leaves get +20 pts for adding a small "input → this → output" diagram.\n`);
+  if (type === 'leaf') {
+    process.stdout.write(`     This is a leaf — consider adding a tiny 2-3 node diagram to score higher.\n`);
+  }
 }
 
 function printClassData(data: any): void {

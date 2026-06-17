@@ -69,6 +69,47 @@ function printJson(plan: IncrementalPlan): void {
   process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
 }
 
+function printExplain(plan: IncrementalPlan, elementPath: string): void {
+  const stale = plan.stale.find(s => s.elementPath === elementPath);
+  const isFresh = plan.fresh.includes(elementPath);
+  const isUnknown = plan.unknown.includes(elementPath);
+
+  process.stdout.write(`\nExplanation for ${elementPath}\n\n`);
+
+  if (stale) {
+    process.stdout.write(`Status: STALE (needs re-analysis)\n`);
+    process.stdout.write(`Reasons: ${stale.reasons.join(', ')}\n`);
+    if (stale.matchedFiles.length > 0) {
+      process.stdout.write(`Matched files:\n`);
+      for (const f of stale.matchedFiles.slice(0, 20)) {
+        process.stdout.write(`  ${f}\n`);
+      }
+      if (stale.matchedFiles.length > 20) {
+        process.stdout.write(`  ... and ${stale.matchedFiles.length - 20} more\n`);
+      }
+    }
+    process.stdout.write(`\nTo fix: run /omm-scan on this element, or 'omm incremental --record <element>' to mark it as scanned.\n`);
+    return;
+  }
+
+  if (isFresh) {
+    process.stdout.write(`Status: FRESH (no changes since last scan)\n`);
+    process.stdout.write(`No re-analysis needed.\n`);
+    process.stdout.write(`\nTip: this element was marked as scanned at its last commit. If the source actually changed but the plan doesn't see it, try 'omm incremental --no-mtime' to skip the mtime fallback.\n`);
+    return;
+  }
+
+  if (isUnknown) {
+    process.stdout.write(`Status: UNKNOWN (no source tracking)\n`);
+    process.stdout.write(`The element has no source_files or source_globs in meta.yaml.\n`);
+    process.stdout.write(`\nTo fix: run 'omm incremental --mark ${elementPath} --files <path>...' to bootstrap tracking.\n`);
+    return;
+  }
+
+  process.stdout.write(`Status: NOT FOUND\n`);
+  process.stdout.write(`'${elementPath}' is not a known element. Run 'omm list' to see available perspectives.\n`);
+}
+
 interface ParsedArgs {
   mode: 'plan' | 'mark' | 'record';
   since?: string;
@@ -80,6 +121,8 @@ interface ParsedArgs {
   globs?: string[];
   replace?: boolean;
   recursive?: boolean;
+  // explain
+  explainPath?: string;
   // record
   recordMode?: 'full' | 'incremental';
 }
@@ -128,6 +171,9 @@ function parseArgs(args: string[]): ParsedArgs {
       out.replace = true;
     } else if (a === '--recursive') {
       out.recursive = true;
+    } else if (a === '--explain' && args[i + 1]) {
+      out.mode = 'plan';
+      out.explainPath = args[++i];
     } else {
       process.stderr.write(`error: unknown arg '${a}'\n`);
       process.exit(1);
@@ -146,6 +192,9 @@ Usage:
   omm incremental --mark <element-path> [--files <path>...] [--globs <glob>...] [--replace] [--recursive]
     Record the source files / globs an element covers. Bootstrap tracking.
     With --recursive, also mark all children with the same files/globs.
+
+  omm incremental --explain <element-path>
+    Show why a specific element is stale / fresh / unknown.
 
   omm incremental --record <element-path> [full|incremental]
     Mark an element as scanned at the current commit. The next incremental
@@ -169,6 +218,13 @@ export async function commandIncremental(args: string[]): Promise<void> {
     const opts: PlanOptions = { mtimeFallback: parsed.mtimeFallback };
     if (parsed.since) opts.since = parsed.since;
     const plan = planIncrementalUpdate('.omm', process.cwd(), opts);
+
+    // --explain <element>: show why one element is or isn't stale
+    if (parsed.explainPath) {
+      printExplain(plan, parsed.explainPath);
+      return;
+    }
+
     if (parsed.json) printJson(plan);
     else printHuman(plan);
     return;

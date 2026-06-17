@@ -39,18 +39,25 @@ interface ParsedArgs {
   help: boolean;
   suggest: boolean;
   explain: string | undefined;
+  explainJson: boolean;
 }
 
 function parseArgs(args: string[]): ParsedArgs {
-  const out: ParsedArgs = { json: false, threshold: 0, changed: false, noColor: false, help: false, suggest: false, explain: undefined };
+  const out: ParsedArgs = { json: false, threshold: 0, changed: false, noColor: false, help: false, suggest: false, explain: undefined, explainJson: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === '--json') out.json = true;
+    if (a === '--json') {
+      out.json = true;
+      if (out.explain) out.explainJson = true;
+    }
     else if (a === '--threshold' && args[i + 1]) out.threshold = parseInt(args[++i], 10) || 0;
     else if (a === '--changed') out.changed = true;
     else if (a === '--no-color') out.noColor = true;
     else if (a === '--suggest') out.suggest = true;
-    else if (a === '--explain' && args[i + 1]) out.explain = args[++i];
+    else if (a === '--explain' && args[i + 1]) {
+      out.explain = args[++i];
+      if (out.json) out.explainJson = true;
+    }
     else if (a === '--help' || a === '-h') out.help = true;
   }
   return out;
@@ -149,7 +156,11 @@ export function commandEval(args: string[]): void {
       process.stderr.write(`Element not found: ${parsed.explain}\n`);
       process.exit(1);
     }
-    printExplain(el, useColor);
+    if (parsed.explainJson) {
+      process.stdout.write(JSON.stringify(el, null, 2) + '\n');
+    } else {
+      printExplain(el, useColor);
+    }
     return;
   }
 
@@ -245,7 +256,10 @@ function printSuggestions(report: import('../lib/eval.js').EvalReport, noColor: 
     if (b.refs.earned < b.refs.max) actions.push(`+${b.refs.max - b.refs.earned} refs`);
     if (b.description.earned < b.description.max) actions.push(`+${b.description.max - b.description.earned} desc`);
     if (b.children.earned < b.children.max) actions.push(`+${(b.children.max - b.children.earned).toFixed(0)} children`);
-    process.stdout.write(`  ${el.path}  ${c('+' + gap.toFixed(0) + ' pts', 33)}  ${actions.join(', ')}\n`);
+    const typeTag = el.type === 'leaf' && b.diagram.earned < b.diagram.max ? ' [leaf → +20 if diagram]' : '';
+    process.stdout.write(`  ${el.path}  ${c('+' + gap.toFixed(0) + ' pts', 33)}  ${actions.join(', ')}${typeTag}\n`);
   }
   process.stdout.write('\n');
+  process.stdout.write('Tip: leaves get +20 pts for adding a small "input → this → output" diagram.\n');
+  process.stdout.write('     Use `omm show <element> --type` to see the type of any element.\n\n');
 }

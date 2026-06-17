@@ -27,8 +27,9 @@ import { commandFlows } from './commands/flows.js';
 import { commandEval } from './commands/eval.js';
 import { commandRefSyntax } from './commands/ref-syntax.js';
 import { commandFeedback } from './commands/feedback.js';
+import { commandDiagramRefs } from './commands/diagram-refs.js';
 
-const GLOBAL_COMMANDS = ['init', 'setup', 'update', 'list', 'show', 'delete', 'status', 'diff', 'refs', 'validate', 'view', 'push', 'pull', 'read', 'write', 'tree', 'config', 'incremental', 'export', 'tag', 'arch', 'share', 'org', 'flows', 'eval', 'ref-syntax', 'feedback', 'help'];
+const GLOBAL_COMMANDS = ['init', 'setup', 'update', 'list', 'show', 'delete', 'status', 'diff', 'refs', 'validate', 'view', 'push', 'pull', 'read', 'write', 'tree', 'config', 'incremental', 'export', 'tag', 'arch', 'share', 'org', 'flows', 'eval', 'ref-syntax', 'feedback', 'diagram-refs', 'help'];
 
 function printHelp(): void {
   const help = `
@@ -59,6 +60,7 @@ Usage:
   omm eval [--json|--explain|--suggest|--threshold <score>]  Evaluate documentation quality
   omm show <path> --type            Show element type (perspective/leaf/group)
   omm ref-syntax                    Document the @class-name convention
+  omm diagram-refs <path> [--json]  List @refs in a diagram with pass/fail status
   omm feedback [--format md|json] [--include <msg>]  Generate feedback report in .omm/
 
 Architecture Repository:
@@ -77,6 +79,22 @@ Fields: description, diagram, constraint, concern, context, todo, note
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
+
+  // omm help <cmd> — drill down to per-command help (must come before general help check)
+  if (args[0] === 'help' && args[1]) {
+    const cmd = args[1];
+    if (!GLOBAL_COMMANDS.includes(cmd)) {
+      process.stderr.write(`error: unknown command '${cmd}'. Run 'omm help' for the full list.\n`);
+      process.exit(1);
+    }
+    const { execFileSync } = await import('node:child_process');
+    try {
+      execFileSync('omm', [cmd, '--help'], { stdio: 'inherit' });
+    } catch {
+      process.stderr.write(`\nNo per-command help available for '${cmd}'. Run 'omm ${cmd} --help' directly or 'omm help' for the full list.\n`);
+    }
+    return;
+  }
 
   if (args.length === 0 || args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
     printHelp();
@@ -236,6 +254,10 @@ async function main(): Promise<void> {
 
     case 'feedback':
       commandFeedback(args.slice(1));
+      return;
+
+    case 'diagram-refs':
+      commandDiagramRefs(args.slice(1));
       return;
 
     default:
