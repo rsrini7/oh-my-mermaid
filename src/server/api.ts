@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import fs from 'node:fs';
 import * as nodePath from 'node:path';
 import { listClasses, showClass, readMeta, readField, listNodes, showNode, listProjects, getOmmDir, isArchRepo, readFlows } from '../lib/store.js';
+import { generateHtmlExport } from '../lib/html-export.js';
 import { diffMermaid } from '../lib/diff.js';
 import { validateDiagram } from '../lib/validate.js';
 import { getIncomingRefs, getOutgoingRefs, buildRefGraph } from '../lib/refs.js';
@@ -153,6 +154,32 @@ export function handleApi(req: IncomingMessage, res: ServerResponse): boolean {
       const children = listNodes(perspective, nodePath);
       json(res, { ...data, children });
     }
+    return true;
+  }
+
+  // GET /api/class/:name/export/html
+  const exportHtmlMatch = path.match(/^\/api\/class\/([^/]+)\/export\/html$/);
+  if (exportHtmlMatch) {
+    const className = exportHtmlMatch[1];
+    const data = showClass(className);
+    if (!data || !data.diagram) {
+      json(res, { error: 'element not found or has no diagram' }, 404);
+      return true;
+    }
+    const flows = readFlows(className);
+    const children: Record<string, import('../types.js').ClassData> = {};
+    const childNames = listNodes(className, []);
+    for (const child of childNames) {
+      const childData = showClass(className + '/' + child);
+      if (childData) children[child] = childData;
+    }
+    // Get project name from omm dir
+    const ommDir = getOmmDir();
+    const projectName = nodePath.basename(nodePath.dirname(ommDir));
+    const title = `${projectName} — ${className}`;
+    const html = generateHtmlExport({ element: className, title, data, flows, children });
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+    res.end(html);
     return true;
   }
 

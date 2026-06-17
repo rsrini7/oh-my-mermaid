@@ -1,33 +1,34 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ensureOmmForRead, showClass, showNode, getOmmDir } from '../lib/store.js';
+import { ensureOmmForRead, showClass, showNode, getOmmDir, readFlows, listNodes } from '../lib/store.js';
+import { generateHtmlExport } from '../lib/html-export.js';
 import type { ClassData } from '../types.js';
 
 const HELP = `
 omm export <element> [options]
 
-Export a perspective or nested element's diagram as SVG or PNG.
+Export a perspective or nested element's diagram as SVG, PNG, or HTML.
 
 Usage:
   omm export <element>                   Export as SVG to stdout
   omm export <element> --format svg      Export as SVG to stdout
   omm export <element> --format png      Export as PNG to stdout (binary)
+  omm export <element> --format html     Export as self-contained HTML
   omm export <element> -o <file>         Write to file (format inferred from extension)
-  omm export <element> --format png -o diagram.png
 
 Options:
-  --format <svg|png>   Output format (default: svg)
-  -o, --output <file>  Write to file instead of stdout
-  -h, --help           Show this help
+  --format <svg|png|html>  Output format (default: svg)
+  -o, --output <file>      Write to file instead of stdout
+  -h, --help               Show this help
 
 Examples:
-  omm export auth-service                          # SVG to stdout
-  omm export auth-service -o auth.svg              # SVG to file
-  omm export auth-service --format png -o auth.png # PNG to file
-  omm export auth-service/tokens                   # nested element
+  omm export auth-service                            # SVG to stdout
+  omm export auth-service -o auth.svg                # SVG to file
+  omm export auth-service --format png -o auth.png   # PNG to file
+  omm export auth-service --format html -o auth.html # Self-contained HTML
 `;
 
-type ExportFormat = 'svg' | 'png';
+type ExportFormat = 'svg' | 'png' | 'html';
 
 interface ParsedArgs {
   element: string;
@@ -41,8 +42,8 @@ function parseArgs(args: string[]): ParsedArgs {
     const a = args[i];
     if (a === '--format' && args[i + 1]) {
       const f = args[++i].toLowerCase();
-      if (f !== 'svg' && f !== 'png') {
-        process.stderr.write(`error: unsupported format '${f}'. Use svg or png.\n`);
+      if (f !== 'svg' && f !== 'png' && f !== 'html') {
+        process.stderr.write(`error: unsupported format '${f}'. Use svg, png, or html.\n`);
         process.exit(1);
       }
       out.format = f;
@@ -63,6 +64,7 @@ function parseArgs(args: string[]): ParsedArgs {
     const ext = path.extname(out.output).toLowerCase();
     if (ext === '.png') out.format = 'png';
     else if (ext === '.svg') out.format = 'svg';
+    else if (ext === '.html') out.format = 'html';
   }
   return out;
 }
@@ -217,6 +219,35 @@ export async function commandExport(args: string[]): Promise<void> {
   const projectName = path.basename(cwd);
   const shortName = parsed.element.includes('/') ? parsed.element.split('/').pop()! : parsed.element;
   const title = `${projectName} — ${shortName}`;
+
+  if (parsed.format === 'html') {
+    const flows = readFlows(parsed.element);
+    const children: Record<string, ClassData> = {};
+    const elemParts = parsed.element.split('/');
+    const perspective = elemParts[0];
+    const nodePath = elemParts.slice(1);
+    const childNames = listNodes(perspective, nodePath);
+    for (const child of childNames) {
+      const childPath = parsed.element + '/' + child;
+      const childData = showClass(childPath);
+      if (childData) children[child] = childData;
+    }
+    const html = generateHtmlExport({
+      element: parsed.element,
+      title,
+      data,
+      flows,
+      children,
+    });
+    if (parsed.output) {
+      fs.mkdirSync(path.dirname(path.resolve(parsed.output)), { recursive: true });
+      fs.writeFileSync(parsed.output, html, 'utf-8');
+      process.stderr.write(`Wrote ${html.length} bytes → ${parsed.output}\n`);
+    } else {
+      process.stdout.write(html + '\n');
+    }
+    return;
+  }
 
   if (parsed.format === 'svg') {
     const svg = await renderToSvg(data.diagram!, title);

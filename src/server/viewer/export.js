@@ -119,6 +119,25 @@ function exportElementPng(cls, classesData, renderFlatSVG) {
   img.src = url;
 }
 
+async function exportElementHtml(cls) {
+  showExportToast('Generating HTML…');
+  try {
+    const res = await fetch(`/api/class/${encodeURIComponent(cls)}/export/html`);
+    if (!res.ok) { showExportToast('Export failed'); return; }
+    const html = await res.text();
+    const project = (typeof window.__projectName === 'string' && window.__projectName) || 'omm';
+    const shortName = cls.includes('/') ? cls.split('/').pop() : cls;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${project}_${shortName}.html`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) {
+    showExportToast('Export failed: ' + e.message);
+  }
+}
+
 /** Setup export button — call after DOM is ready */
 export function setupExport(getSelectedCls, classesDataRef, renderFlatSVGRef) {
   window.exportDiagram = function() {
@@ -154,6 +173,7 @@ export function setupExport(getSelectedCls, classesDataRef, renderFlatSVGRef) {
     const items = [
       { label: 'SVG', action: () => exportElementSvg(cls, classesDataRef(), renderFlatSVGRef) },
       { label: 'PNG', action: () => exportElementPng(cls, classesDataRef(), renderFlatSVGRef) },
+      { label: 'HTML', action: () => exportElementHtml(cls) },
     ];
     for (const {label, action} of items) {
       const item = document.createElement('button');
