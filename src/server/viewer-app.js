@@ -2218,6 +2218,9 @@ function __openSbKeepMode(cls) {
   document.querySelectorAll('.nav-item').forEach(el => {
     el.classList.toggle('active', el.getAttribute('data-nav') === cls);
   });
+  // Auto-scroll the nav list to show the selected element
+  var activeNav = document.querySelector('.nav-item.active');
+  if (activeNav) activeNav.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   openSidebar(dataKey, cls);
   loadFlows(cls).then(() => renderFlowBar(cls));
 }
