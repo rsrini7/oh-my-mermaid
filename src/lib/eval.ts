@@ -31,6 +31,7 @@ export interface ElementEval {
   isRefTarget: boolean;
   refCount: number;
   tags: string[];
+  corruptedTagCount: number; // count of tags that aren't strings (objects/numbers)
   childCount: number;
   childrenCovered: number;
   score: number; // 0-100
@@ -116,7 +117,19 @@ function evaluateElement(elemPath: string, isPerspective: boolean, cwd?: string)
   const meta = nodePath.length > 0
     ? readNodeMeta(perspective, nodePath, cwd)
     : readMeta(perspective, cwd);
-  const tags = meta?.tags || [];
+
+  // Tags — sanitize: keep only string tags, count corrupted ones
+  const rawTags = meta?.tags || [];
+  const tags: string[] = [];
+  let corruptedTagCount = 0;
+  for (const t of rawTags) {
+    if (typeof t === 'string') {
+      tags.push(t);
+    } else {
+      // Non-string tags indicate data corruption (e.g. an AI agent wrote an error message as a tag)
+      corruptedTagCount++;
+    }
+  }
 
   // Type
   const type: 'perspective' | 'leaf' | 'group' = isPerspective ? 'perspective' : (hasDiagram ? 'group' : 'leaf');
@@ -170,6 +183,7 @@ function evaluateElement(elemPath: string, isPerspective: boolean, cwd?: string)
     isRefTarget: incoming.length > 0,
     refCount: incoming.length + outgoing.length,
     tags,
+    corruptedTagCount,
     childCount,
     childrenCovered,
     score: Math.round(score),
@@ -215,6 +229,14 @@ export function evaluateProject(cwd?: string): EvalReport {
     }
     if (el.tags.length === 0 && el.type === 'perspective') {
       suggestions.push(`Consider adding tags to perspective ${el.path} for categorization`);
+    }
+    if (el.corruptedTagCount > 0) {
+      issues.push({
+        type: 'corrupted-tags',
+        severity: 'warning',
+        message: `${el.corruptedTagCount} tag(s) are not strings (likely written by an AI agent from an error message). Use 'omm tag ${el.path} set <valid-tags>' to fix.`,
+        path: el.path,
+      });
     }
   }
 

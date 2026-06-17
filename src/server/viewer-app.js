@@ -1050,10 +1050,21 @@ function openSidebar(cls, origCls) {
     ${children.length ? `<span class="sb-metric"><span class="sb-metric-value">${children.length}</span> children</span>` : ''}
   </div></div>`;
 
-  // Tags
+  // Tags — filter to strings only, mark corrupt ones for the user
   if (data.meta?.tags?.length) {
-    const tagHtml = data.meta.tags.map(t => `<span class="sb-tag">${esc(t)}</span>`).join('');
-    html += `<div class="sb-sec"><div class="sb-sec-title">Tags</div><div class="sb-tags">${tagHtml}</div></div>`;
+    const validTags = [];
+    let corruptCount = 0;
+    for (const t of data.meta.tags) {
+      if (typeof t === 'string') validTags.push(t);
+      else corruptCount++;
+    }
+    if (validTags.length || corruptCount > 0) {
+      const tagHtml = validTags.map(t => `<span class="sb-tag">${esc(t)}</span>`).join('');
+      const corruptHint = corruptCount > 0
+        ? ` <span style="color:var(--warning);font-size:11px">(${corruptCount} corrupt — run <code>omm eval</code> to fix)</span>`
+        : '';
+      html += `<div class="sb-sec"><div class="sb-sec-title">Tags</div><div class="sb-tags">${tagHtml}${corruptHint}</div></div>`;
+    }
   }
   html+=sec('Description',md(data.description));
   html+=sec('Constraints',md(data.constraint));

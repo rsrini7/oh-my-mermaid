@@ -112,6 +112,35 @@ The overall score is the sum of 6 components:
 
 Use `omm eval --explain <element>` to see which components are missing for a specific element.
 
+### Issue types (from `issues` array)
+
+The eval report includes an `issues` array. Each issue has:
+- `type` — one of: `missing-description`, `invalid-diagram`, `incomplete-children`, `sparse-fields`, `no-flows`, `corrupted-tags`
+- `severity` — `error` | `warning` | `info`
+- `message` — human-readable description with fix suggestion
+- `path` — element path
+
+When the loop runs, address issues in priority order:
+1. **errors** — must fix
+2. **warnings** — should fix
+3. **info** — nice to fix
+
+### `corrupted-tags` detection
+
+If a tag was written as something other than a string (e.g. an error message from a failed command that got passed to `omm tag add`), the eval will report `corrupted-tags` as a warning. To fix:
+
+```bash
+# 1. Eval detects the corruption
+omm eval
+# ⚠ path/to/element: 1 tag(s) are not strings...
+
+# 2. Read the message — it tells you the exact fix command
+# 3. Run the fix
+omm tag path/to/element set valid-tag-1,valid-tag-2
+```
+
+This commonly happens when an AI agent pipes a command's error output into `omm tag add`. Always validate tag values are simple strings before adding.
+
 ## Step 3: Iterative Improvement Loop
 
 Run the following loop until score >= target or max iterations reached:

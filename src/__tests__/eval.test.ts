@@ -233,4 +233,29 @@ describe('evaluateProject', () => {
     expect(el.scoreBreakdown.flows.count).toBe(2);
     expect(el.scoreBreakdown.flows.earned).toBe(10);
   });
+
+  it('detects corrupted tags (non-string values)', () => {
+    writeField('p', 'description', 'd', tmpDir);
+    writeField('p', 'diagram', 'graph LR\nA-->B', tmpDir);
+    // Manually write a meta.yaml with corrupted tags (object instead of string)
+    fs.writeFileSync(path.join(tmpDir, '.omm', 'p', 'meta.yaml'),
+      `created: 2026-01-01T00:00:00Z
+updated: 2026-01-01T00:00:00Z
+update_count: 1
+last_field: description
+title: p
+tags:
+  - error: element not found
+  - valid-tag
+`);
+
+    const report = evaluateProject(tmpDir);
+    const el = report.elements[0];
+    expect(el.tags).toEqual(['valid-tag']);
+    expect(el.corruptedTagCount).toBe(1);
+    const issue = report.issues.find(i => i.type === 'corrupted-tags');
+    expect(issue).toBeTruthy();
+    expect(issue!.severity).toBe('warning');
+    expect(issue!.message).toContain('not strings');
+  });
 });
