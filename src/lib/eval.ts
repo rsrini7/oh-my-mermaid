@@ -5,6 +5,15 @@ import { listClasses, listNodes, readField, readNodeField, readMeta, readNodeMet
 import { getIncomingRefs, getOutgoingRefs } from './refs.js';
 import { validateDiagram } from './validate.js';
 
+export interface ScoreBreakdown {
+  fields: { earned: number; max: number; present: number; total: number };
+  diagram: { earned: number; max: number; valid: boolean; has: boolean };
+  description: { earned: number; max: number; length: number };
+  flows: { earned: number; max: number; count: number };
+  refs: { earned: number; max: number; incoming: number; outgoing: number };
+  children: { earned: number; max: number; covered: number; total: number };
+}
+
 export interface ElementEval {
   name: string;
   path: string;
@@ -25,6 +34,7 @@ export interface ElementEval {
   childCount: number;
   childrenCovered: number;
   score: number; // 0-100
+  scoreBreakdown: ScoreBreakdown;
 }
 
 export interface EvalReport {
@@ -114,23 +124,34 @@ function evaluateElement(elemPath: string, isPerspective: boolean, cwd?: string)
   // Score (0-100)
   let score = 0;
   // Field coverage: 40 points
+  // Score breakdown — each component tracked separately
+  const scoreBreakdown = {
+    fields: { earned: 0, max: 40, present: fieldsPresent.length, total: VALID_FIELDS.length },
+    diagram: { earned: 0, max: 20, valid: hasDiagram && diagramValid, has: hasDiagram },
+    description: { earned: 0, max: 10, length: description?.length || 0 },
+    flows: { earned: 0, max: 10, count: flows.length },
+    refs: { earned: 0, max: 10, incoming: incoming.length, outgoing: outgoing.length },
+    children: { earned: 0, max: 10, covered: childrenCovered, total: childCount },
+  };
+
   score += (fieldsPresent.length / VALID_FIELDS.length) * 40;
+  scoreBreakdown.fields.earned = (fieldsPresent.length / VALID_FIELDS.length) * 40;
   // Diagram: 20 points
-  if (hasDiagram && diagramValid) score += 20;
-  else if (hasDiagram) score += 10;
+  if (hasDiagram && diagramValid) { score += 20; scoreBreakdown.diagram.earned = 20; }
+  else if (hasDiagram) { score += 10; scoreBreakdown.diagram.earned = 10; }
   // Description quality: 10 points
   if (hasDescription) {
-    if (description!.length > 50) score += 10;
-    else if (description!.length > 20) score += 5;
+    if (description!.length > 50) { score += 10; scoreBreakdown.description.earned = 10; }
+    else if (description!.length > 20) { score += 5; scoreBreakdown.description.earned = 5; }
   }
   // Flows: 10 points
-  if (hasFlows) score += 10;
+  if (hasFlows) { score += 10; scoreBreakdown.flows.earned = 10; }
   // Refs: 10 points
-  if (incoming.length > 0 || outgoing.length > 0) score += 10;
+  if (incoming.length > 0 || outgoing.length > 0) { score += 10; scoreBreakdown.refs.earned = 10; }
   // Children coverage: 10 points
-  if (childCount === 0) score += 10;
-  else if (childrenCovered === childCount) score += 10;
-  else score += (childrenCovered / childCount) * 10;
+  if (childCount === 0) { score += 10; scoreBreakdown.children.earned = 10; }
+  else if (childrenCovered === childCount) { score += 10; scoreBreakdown.children.earned = 10; }
+  else { const c = (childrenCovered / childCount) * 10; score += c; scoreBreakdown.children.earned = c; }
 
   return {
     name: parts[parts.length - 1],
@@ -152,6 +173,7 @@ function evaluateElement(elemPath: string, isPerspective: boolean, cwd?: string)
     childCount,
     childrenCovered,
     score: Math.round(score),
+    scoreBreakdown,
   };
 }
 

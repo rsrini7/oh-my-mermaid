@@ -171,4 +171,66 @@ describe('evaluateProject', () => {
     expect(childA?.type).toBe('group'); // has diagram
     expect(childB?.type).toBe('leaf'); // no diagram
   });
+
+  it('includes scoreBreakdown in element eval', () => {
+    writeField('auth', 'description', 'Auth description longer than fifty characters to score full points', tmpDir);
+    writeField('auth', 'diagram', 'graph LR\nA --> B', tmpDir);
+    writeField('auth', 'context', 'c', tmpDir);
+    writeField('auth', 'constraint', 'c', tmpDir);
+    writeField('auth', 'concern', 'c', tmpDir);
+    writeField('auth', 'todo', 't', tmpDir);
+    writeField('auth', 'note', 'n', tmpDir);
+
+    const report = evaluateProject(tmpDir);
+    const el = report.elements[0];
+    expect(el.scoreBreakdown).toBeDefined();
+    expect(el.scoreBreakdown.fields.max).toBe(40);
+    expect(el.scoreBreakdown.diagram.max).toBe(20);
+    expect(el.scoreBreakdown.description.max).toBe(10);
+    expect(el.scoreBreakdown.flows.max).toBe(10);
+    expect(el.scoreBreakdown.refs.max).toBe(10);
+    expect(el.scoreBreakdown.children.max).toBe(10);
+  });
+
+  it('scoreBreakdown sums to the overall score', () => {
+    writeField('auth', 'description', 'Auth', tmpDir);
+    writeField('auth', 'diagram', 'graph LR\nA --> B', tmpDir);
+
+    const report = evaluateProject(tmpDir);
+    const el = report.elements[0];
+    const b = el.scoreBreakdown;
+    const sum = b.fields.earned + b.diagram.earned + b.description.earned + b.flows.earned + b.refs.earned + b.children.earned;
+    expect(Math.round(sum)).toBe(el.score);
+  });
+
+  it('scoreBreakdown tracks fields present/total', () => {
+    writeField('p', 'description', 'd', tmpDir);
+    // Only 1/7 fields
+    const report = evaluateProject(tmpDir);
+    const el = report.elements[0];
+    expect(el.scoreBreakdown.fields.present).toBe(1);
+    expect(el.scoreBreakdown.fields.total).toBe(7);
+    expect(el.scoreBreakdown.fields.earned).toBeCloseTo(40 / 7);
+  });
+
+  it('scoreBreakdown tracks diagram validity', () => {
+    writeField('p', 'description', 'd', tmpDir);
+    writeField('p', 'diagram', 'graph LR\nA-->B', tmpDir);
+    const report = evaluateProject(tmpDir);
+    const el = report.elements[0];
+    expect(el.scoreBreakdown.diagram.has).toBe(true);
+    expect(el.scoreBreakdown.diagram.valid).toBe(true);
+    expect(el.scoreBreakdown.diagram.earned).toBe(20);
+  });
+
+  it('scoreBreakdown tracks flow count', () => {
+    writeField('p', 'description', 'd', tmpDir);
+    writeField('p', 'diagram', 'graph LR\nA-->B', tmpDir);
+    fs.writeFileSync(path.join(tmpDir, '.omm', 'p', 'flows.yaml'),
+      'flows:\n  - name: F1\n    steps: [{node: a}]\n  - name: F2\n    steps: [{node: b}]\n');
+    const report = evaluateProject(tmpDir);
+    const el = report.elements[0];
+    expect(el.scoreBreakdown.flows.count).toBe(2);
+    expect(el.scoreBreakdown.flows.earned).toBe(10);
+  });
 });
