@@ -767,7 +767,7 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeSidebar(); closeSearch(); searchInput.blur(); }
   if (e.key === '/' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); searchInput.focus(); searchInput.select(); }
   if (e.key === 'f' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); centerView(); }
-  if (e.key === 't' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); toggleTheme(); rebuildCanvas(); }
+  if (e.key === 't' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); window.toggleTheme(); }
   // Arrow keys: navigate elements in the sidebar
   if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.metaKey && !e.ctrlKey) {
     navigateElement(e.key === 'ArrowRight' ? 1 : -1);
@@ -1808,7 +1808,14 @@ document.addEventListener('click', (e) => {
 
 
 // ── window globals for inline onclick handlers ────────────
-window.toggleTheme = function() { toggleTheme(); rebuildCanvas(); };
+window.toggleTheme = function() {
+  toggleTheme();
+  if (_networkMode) {
+    renderNetworkGraph();
+  } else {
+    rebuildCanvas();
+  }
+};
 window.__showDiagramTab = function(tab) {
   const container = document.getElementById('sb-diagram');
   if (!container) return;
