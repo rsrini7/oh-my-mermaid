@@ -969,11 +969,28 @@ const floatControls = document.querySelector('.float-controls');
 
 function openSidebar(cls, origCls) {
   if (!origCls) origCls = cls;
-  // Use origCls for data (shows the clicked element's fields)
-  // Use cls only for diagram rendering (resolved to nearest ancestor with diagram)
-  const data=classesData[origCls]||classesData[cls]||{};
+  const ownData = classesData[origCls] || {};
+  const diagramData = classesData[cls] || {};
+  const hasOwnData = Object.keys(ownData).length > 0;
+  // Merge: own data takes precedence for content fields, diagram comes from ancestor if leaf has none
+  const data = hasOwnData ? {
+    ...diagramData,
+    ...ownData,
+    diagram: ownData.diagram || diagramData.diagram,
+    meta: ownData.meta || diagramData.meta,
+    children: ownData.children || diagramData.children,
+  } : diagramData;
   const refs=refsData[origCls]||refsData[cls]||{};
-  sbTitle.textContent=fmtLabel(origCls);
+  // For diagram-only nodes (no .omm element), show the node label from parent diagram
+  const isDiagramOnly = !hasOwnData && origCls !== cls;
+  let displayTitle = fmtLabel(origCls);
+  if (isDiagramOnly && diagramData.diagram) {
+    // Extract node label from parent diagram
+    const nodeId = origCls.split('/').pop();
+    const labelMatch = diagramData.diagram.match(new RegExp(nodeId + '\\["([^"]+)"\\]'));
+    if (labelMatch) displayTitle = labelMatch[1].replace(/\\n/g, ' — ');
+  }
+  sbTitle.textContent = displayTitle;
 
   // Render diagram SVG in sidebar with code toggle
   sbDiagram.innerHTML = '';
@@ -1010,46 +1027,50 @@ function openSidebar(cls, origCls) {
   const sec=(title,body,ex='')=>body?`<div class="sb-sec ${ex}"><div class="sb-sec-title">${title}</div><div class="sb-sec-body">${body}</div></div>`:'';
   let html='';
 
-  // Diff toggle button (only when prev_diagram exists)
-  if (data.diagram && data.meta?.prev_diagram) {
-    html += `<div class="sb-sec"><button id="sb-diff-btn" class="sb-diff-toggle" onclick="window.__toggleDiff('${esc(cls)}')">Show Diff</button></div>`;
+  // Hint for diagram-only nodes (no .omm element)
+  if (isDiagramOnly) {
+    const nodeId = origCls.split('/').pop();
+    html += `<div class="sb-sec"><div class="sb-sec-body" style="color:var(--text-muted);font-style:italic;padding:8px 0">
+      <code>${esc(nodeId)}</code> is a diagram node in <code>${esc(cls)}</code>. No dedicated documentation element exists for it yet.
+    </div></div>`;
   }
 
-  // Validate button (only when diagram exists)
-  if (data.diagram) {
-    html += `<div class="sb-sec"><button class="sb-diff-toggle" onclick="window.__validateElement('${esc(cls)}')">Validate Diagram</button></div>
-      <div id="sb-validate-results"></div>`;
-  }
-
-  if (data.meta) {
-    const t=data.meta.updated?new Date(data.meta.updated).toLocaleString():'';
-    html+=`<div class="sb-sec"><div class="sb-sec-title">Meta</div><div class="sb-meta-text">${t?t+'<br>':''}${data.meta.update_count||0} updates${data.meta.git_branch?` · ${data.meta.git_branch}`:''}${data.meta.git_commit?` · ${data.meta.git_commit}`:''}</div></div>`;
-  }
-
-  // Metrics
-  const allFields = ['description','diagram','constraint','concern','context','todo','note'];
-  const filledFields = allFields.filter(f => data[f] && data[f].trim());
-  const coverage = Math.round((filledFields.length / allFields.length) * 100);
-  const totalWords = filledFields.reduce((sum, f) => sum + (data[f].trim().split(/\s+/).length), 0);
-  const children = data.meta?.children ?? [];
-  let diagramNodes = 0, diagramEdges = 0;
-  if (data.diagram) {
-    try {
-      const parsed = parseFlowchart(data.diagram);
-      diagramNodes = parsed.nodes.length;
-      diagramEdges = parsed.edges.length;
-    } catch {}
-  }
-  const complexity = diagramNodes > 15 ? 'high' : diagramNodes > 8 ? 'medium' : 'low';
-  const _cv = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  const complexityColor = complexity === 'high' ? (_cv('--error') || '#ef4444') : complexity === 'medium' ? (_cv('--warning') || '#fbbf24') : (_cv('--success') || '#22c55e');
-  html += `<div class="sb-sec"><div class="sb-sec-title">Metrics</div><div class="sb-metrics">
-    <span class="sb-metric"><span class="sb-metric-value">${coverage}%</span> coverage</span>
-    <span class="sb-metric"><span class="sb-metric-value">${totalWords}</span> words</span>
-    ${diagramNodes ? `<span class="sb-metric"><span class="sb-metric-value">${diagramNodes}N/${diagramEdges}E</span> diagram</span>` : ''}
-    ${diagramNodes ? `<span class="sb-metric"><span class="sb-metric-value" style="color:${complexityColor}">${complexity}</span> complexity</span>` : ''}
-    ${children.length ? `<span class="sb-metric"><span class="sb-metric-value">${children.length}</span> children</span>` : ''}
-  </div></div>`;
+  // Diff toggle, validate, meta, metrics, tags — skip for diagram-only nodes
+  if (!isDiagramOnly) {
+    if (data.diagram && data.meta?.prev_diagram) {
+      html += `<div class="sb-sec"><button id="sb-diff-btn" class="sb-diff-toggle" onclick="window.__toggleDiff('${esc(cls)}')">Show Diff</button></div>`;
+    }
+    if (data.diagram) {
+      html += `<div class="sb-sec"><button class="sb-diff-toggle" onclick="window.__validateElement('${esc(cls)}')">Validate Diagram</button></div>
+        <div id="sb-validate-results"></div>`;
+    }
+    if (data.meta) {
+      const t=data.meta.updated?new Date(data.meta.updated).toLocaleString():'';
+      html+=`<div class="sb-sec"><div class="sb-sec-title">Meta</div><div class="sb-meta-text">${t?t+'<br>':''}${data.meta.update_count||0} updates${data.meta.git_branch?` · ${data.meta.git_branch}`:''}${data.meta.git_commit?` · ${data.meta.git_commit}`:''}</div></div>`;
+    }
+    const allFields = ['description','diagram','constraint','concern','context','todo','note'];
+    const filledFields = allFields.filter(f => data[f] && data[f].trim());
+    const coverage = Math.round((filledFields.length / allFields.length) * 100);
+    const totalWords = filledFields.reduce((sum, f) => sum + (data[f].trim().split(/\s+/).length), 0);
+    const children = data.meta?.children ?? [];
+    let diagramNodes = 0, diagramEdges = 0;
+    if (data.diagram) {
+      try {
+        const parsed = parseFlowchart(data.diagram);
+        diagramNodes = parsed.nodes.length;
+        diagramEdges = parsed.edges.length;
+      } catch {}
+    }
+    const complexity = diagramNodes > 15 ? 'high' : diagramNodes > 8 ? 'medium' : 'low';
+    const _cv = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    const complexityColor = complexity === 'high' ? (_cv('--error') || '#ef4444') : complexity === 'medium' ? (_cv('--warning') || '#fbbf24') : (_cv('--success') || '#22c55e');
+    html += `<div class="sb-sec"><div class="sb-sec-title">Metrics</div><div class="sb-metrics">
+      <span class="sb-metric"><span class="sb-metric-value">${coverage}%</span> coverage</span>
+      <span class="sb-metric"><span class="sb-metric-value">${totalWords}</span> words</span>
+      ${diagramNodes ? `<span class="sb-metric"><span class="sb-metric-value">${diagramNodes}N/${diagramEdges}E</span> diagram</span>` : ''}
+      ${diagramNodes ? `<span class="sb-metric"><span class="sb-metric-value" style="color:${complexityColor}">${complexity}</span> complexity</span>` : ''}
+      ${children.length ? `<span class="sb-metric"><span class="sb-metric-value">${children.length}</span> children</span>` : ''}
+    </div></div>`;
 
   // Tags — filter to strings only, mark corrupt ones for the user
   if (data.meta?.tags?.length) {
@@ -1067,12 +1088,17 @@ function openSidebar(cls, origCls) {
       html += `<div class="sb-sec"><div class="sb-sec-title">Tags</div><div class="sb-tags">${tagHtml}${corruptHint}</div></div>`;
     }
   }
-  html+=sec('Description',md(data.description));
-  html+=sec('Constraints',md(data.constraint));
-  html+=sec('Concerns',md(data.concern),'sb-concern');
-  html+=sec('Context',md(data.context));
-  html+=sec('Todo',md(data.todo));
-  html+=sec('Notes',md(data.note));
+  } // end !isDiagramOnly
+
+  // Content fields — skip for diagram-only nodes (they belong to the parent, not this node)
+  if (!isDiagramOnly) {
+    html+=sec('Description',md(data.description));
+    html+=sec('Constraints',md(data.constraint));
+    html+=sec('Concerns',md(data.concern),'sb-concern');
+    html+=sec('Context',md(data.context));
+    html+=sec('Todo',md(data.todo));
+    html+=sec('Notes',md(data.note));
+  }
   const inc=refs.incoming||[], out=refs.outgoing||[];
   if (inc.length||out.length) {
     const links=[
@@ -1547,14 +1573,28 @@ async function init() {
   const flowLoads = classes.map(c => loadFlows(c));
   await Promise.all(flowLoads);
 
-  // Pre-load nested element data for all children
-  const nodeLoads = [];
-  for (const persp of Object.keys(childrenByPerspective)) {
-    for (const child of childrenByPerspective[persp]) {
-      nodeLoads.push(loadNodeData(persp, child));
+  // Pre-load nested element data for all children (recursive)
+  async function loadAllDescendants(persp, children) {
+    for (const child of children) {
+      const data = await loadNodeData(persp, child);
+      if (data && data.children && data.children.length > 0) {
+        const deeperLoads = [];
+        for (const sub of data.children) {
+          deeperLoads.push(loadSubNodeData(persp, child + '/' + sub, sub));
+        }
+        await Promise.all(deeperLoads);
+        for (const sub of data.children) {
+          const subData = classesData[persp + '/' + child + '/' + sub];
+          if (subData && subData.children && subData.children.length > 0) {
+            await loadAllDescendants(persp, [child + '/' + sub]);
+          }
+        }
+      }
     }
   }
-  await Promise.all(nodeLoads);
+  for (const persp of Object.keys(childrenByPerspective)) {
+    await loadAllDescendants(persp, childrenByPerspective[persp]);
+  }
 
   // Set project name and build nav tree
   var projName = window.__projectName || 'omm';
