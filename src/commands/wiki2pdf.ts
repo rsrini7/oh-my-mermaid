@@ -649,6 +649,7 @@ export async function commandWiki2Pdf(args: string[]): Promise<void> {
     else if (arg === '--menu' && args[i + 1]) menuConfig = args[++i];
     else if (arg === '--color' && args[i + 1]) primaryColor = args[++i];
     else if (arg === '--help' || arg === '-h') help = true;
+    else if (!arg.startsWith('-')) srcDir = arg; // positional: source directory
   }
 
   if (args.length === 0 || help) {

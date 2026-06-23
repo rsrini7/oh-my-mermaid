@@ -1411,6 +1411,7 @@ export async function commandWiki2Html(args: string[]): Promise<void> {
     else if (arg === '--create-menu') createMenu = true;
     else if (arg === '--menu-path' && args[i + 1]) menuJsonPath = args[++i];
     else if (arg === '--help' || arg === '-h') help = true;
+    else if (!arg.startsWith('-')) srcDir = arg; // positional: source directory
   }
 
   if (args.length === 0 || help) {
