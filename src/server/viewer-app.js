@@ -1567,6 +1567,48 @@ async function loadSubNodeData(perspective, subPath, shortName) {
   }
 }
 
+// ── language stats ───────────────────────────────────────
+const LANG_COLORS = {
+  typescript: '#3178c6',
+  javascript: '#f7df1e',
+  python: '#3572a5',
+  java: '#b07219',
+  kotlin: '#a97bff',
+  scala: '#c22d40',
+  go: '#00add8',
+  rust: '#dea584',
+};
+
+async function loadLanguageStats() {
+  const el = document.getElementById('lang-stats');
+  if (!el) return;
+  try {
+    const data = await api('/api/stats');
+    if (!data || data.error || !data.languageStats) { el.style.display = 'none'; return; }
+    const stats = data.languageStats;
+    const sorted = Object.entries(stats).sort((a, b) => b[1].percentage - a[1].percentage);
+    if (sorted.length === 0) { el.style.display = 'none'; return; }
+
+    // Color bar
+    let barHtml = '<div class="lang-stats-bar">';
+    for (const [lang, s] of sorted) {
+      const color = LANG_COLORS[lang] || '#888';
+      barHtml += `<div class="lang-stats-segment" style="width:${s.percentage}%;background:${color}"></div>`;
+    }
+    barHtml += '</div>';
+
+    // Labels
+    let labelsHtml = '<div class="lang-stats-labels">';
+    for (const [lang, s] of sorted) {
+      const color = LANG_COLORS[lang] || '#888';
+      labelsHtml += `<span class="lang-stats-label"><span class="lang-stats-dot" style="background:${color}"></span>${lang} <span class="lang-stats-pct">${s.percentage}%</span></span>`;
+    }
+    labelsHtml += '</div>';
+
+    el.innerHTML = barHtml + labelsHtml;
+  } catch { el.style.display = 'none'; }
+}
+
 // ── init ──────────────────────────────────────────────────
 async function init() {
   applyTheme();
@@ -1629,6 +1671,9 @@ async function init() {
   if (mobileTitle) mobileTitle.textContent = projName;
   buildNavTree();
   autoSizeNav();
+
+  // Load and render language statistics
+  loadLanguageStats();
 
   const result = buildCanvas(originalPerspectives, classesData, refsData);
   if (result) {

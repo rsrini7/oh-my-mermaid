@@ -7,6 +7,7 @@ import { diffMermaid } from '../lib/diff.js';
 import { validateDiagram } from '../lib/validate.js';
 import { getIncomingRefs, getOutgoingRefs, buildRefGraph } from '../lib/refs.js';
 import { searchOmm } from './search.js';
+import { analyzeDirectory } from '../lib/analyzer/index.js';
 
 function json(res: ServerResponse, data: unknown, status = 200): void {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -19,7 +20,7 @@ function numParam(v: string | null): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-export function handleApi(req: IncomingMessage, res: ServerResponse): boolean {
+export async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
   const path = url.pathname;
 
@@ -143,6 +144,24 @@ export function handleApi(req: IncomingMessage, res: ServerResponse): boolean {
   // GET /api/refs/graph
   if (path === '/api/refs/graph') {
     json(res, buildRefGraph());
+    return true;
+  }
+
+  // GET /api/stats — language statistics and codebase health
+  if (path === '/api/stats') {
+    const ommDir = getOmmDir();
+    const cwd = ommDir ? nodePath.dirname(ommDir) : process.cwd();
+    try {
+      const analysis = await analyzeDirectory(cwd);
+      json(res, {
+        languageStats: analysis.stats.languageStats,
+        totalFiles: analysis.stats.totalFiles,
+        analyzedFiles: analysis.stats.analyzedFiles,
+        errorFiles: analysis.stats.errorFiles,
+      });
+    } catch (err: any) {
+      json(res, { error: err.message });
+    }
     return true;
   }
 

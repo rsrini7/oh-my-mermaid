@@ -76,6 +76,13 @@ export interface FingerprintDelta {
   hasChanges: boolean;
 }
 
+export interface LanguageStats {
+  files: number;
+  lines: number;
+  bytes: number;
+  percentage: number;
+}
+
 export interface AnalysisResult {
   files: FileAnalysis[];
   graph: DependencyGraph;
@@ -87,5 +94,6 @@ export interface AnalysisResult {
     skippedFiles: number;
     errorFiles: number;
     languages: Record<string, number>;
+    languageStats: Record<string, LanguageStats>;
   };
 }

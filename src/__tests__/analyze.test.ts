@@ -278,7 +278,7 @@ describe('formatAnalysisMarkdown', () => {
     ];
     const graph = buildDependencyGraph(analyses);
     const modules = detectModuleBoundaries(graph, analyses);
-    const result = { files: analyses, graph, modules, errors: [], stats: { totalFiles: 2, analyzedFiles: 2, skippedFiles: 0, errorFiles: 0, languages: { typescript: 2 } } };
+    const result = { files: analyses, graph, modules, errors: [], stats: { totalFiles: 2, analyzedFiles: 2, skippedFiles: 0, errorFiles: 0, languages: { typescript: 2 }, languageStats: {} } };
     const md = formatAnalysisMarkdown(result);
     expect(md).toContain('Codebase Analysis');
     expect(md).toContain('Dependency Graph');
@@ -293,7 +293,7 @@ describe('formatAnalysisJSON', () => {
       { file: 'src/a.ts', language: 'typescript', imports: [], exports: [], definitions: [], calls: [] },
     ];
     const graph = buildDependencyGraph(analyses);
-    const result = { files: analyses, graph, modules: [], errors: [], stats: { totalFiles: 1, analyzedFiles: 1, skippedFiles: 0, errorFiles: 0, languages: { typescript: 1 } } };
+    const result = { files: analyses, graph, modules: [], errors: [], stats: { totalFiles: 1, analyzedFiles: 1, skippedFiles: 0, errorFiles: 0, languages: { typescript: 1 }, languageStats: {} } };
     const json = formatAnalysisJSON(result);
     const parsed = JSON.parse(json);
     expect(parsed.files.length).toBe(1);

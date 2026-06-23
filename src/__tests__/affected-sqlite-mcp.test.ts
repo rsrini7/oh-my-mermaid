@@ -29,7 +29,7 @@ describe('affected command', () => {
       graph: mockGraph,
       modules: [],
       errors: [],
-      stats: { totalFiles: 4, analyzedFiles: 4, skippedFiles: 0, errorFiles: 0, languages: {} },
+      stats: { totalFiles: 4, analyzedFiles: 4, skippedFiles: 0, errorFiles: 0, languages: {}, languageStats: {} },
     });
 
     const spyStdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);

@@ -75,7 +75,7 @@ export function startServer(port: number, host: string = '127.0.0.1'): void {
   // Detect once at startup — no per-request global mutation
   const archInfo = detectArchRepo();
 
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
     const projectParam = url.searchParams.get('project');
 
@@ -95,7 +95,7 @@ export function startServer(port: number, host: string = '127.0.0.1'): void {
 
     // API endpoints — pass project context via query param, no global state
     if (url.pathname.startsWith('/api/')) {
-      if (handleApi(req, res)) return;
+      if (await handleApi(req, res)) return;
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'not found' }));
       return;

@@ -4,7 +4,24 @@ import { getHandlerForFile, getSupportedExtensions } from './registry.js';
 import { extractRoutes } from './routes.js';
 import type { FileAnalysis, DependencyGraph, DependencyNode, DependencyEdge, ModuleBoundary, AnalysisResult } from './types.js';
 
-export type { FileAnalysis, DependencyGraph, DependencyNode, DependencyEdge, ModuleBoundary, AnalysisResult } from './types.js';
+export type { FileAnalysis, DependencyGraph, DependencyNode, DependencyEdge, ModuleBoundary, AnalysisResult, LanguageStats } from './types.js';
+
+const LANG_COLORS: Record<string, string> = {
+  typescript: '▓',
+  javascript: '░',
+  python: '▒',
+  java: '▓',
+  kotlin: '░',
+  scala: '▒',
+  go: '▓',
+  rust: '░',
+};
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const IGNORED_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt',
@@ -124,6 +141,8 @@ export async function analyzeDirectory(dir: string): Promise<AnalysisResult> {
   const analyses: FileAnalysis[] = [];
   const errors: { file: string; error: string }[] = [];
   const languageCounts: Record<string, number> = {};
+  const languageLines: Record<string, number> = {};
+  const languageBytes: Record<string, number> = {};
 
   for (const file of files) {
     try {
@@ -131,11 +150,29 @@ export async function analyzeDirectory(dir: string): Promise<AnalysisResult> {
       if (analysis) {
         analyses.push(analysis);
         languageCounts[analysis.language] = (languageCounts[analysis.language] || 0) + 1;
+        // Count lines and bytes from the source file
+        const source = fs.readFileSync(file, 'utf-8');
+        const lines = source.split('\n').length;
+        const bytes = Buffer.byteLength(source, 'utf-8');
+        languageLines[analysis.language] = (languageLines[analysis.language] || 0) + lines;
+        languageBytes[analysis.language] = (languageBytes[analysis.language] || 0) + bytes;
         if (analysis.error) errors.push({ file: analysis.file, error: analysis.error });
       }
     } catch (err: any) {
       errors.push({ file: path.relative(rootDir, file).replace(/\\/g, '/'), error: err.message });
     }
+  }
+
+  // Calculate percentages
+  const totalBytes = Object.values(languageBytes).reduce((sum, b) => sum + b, 0);
+  const languageStats: Record<string, import('./types.js').LanguageStats> = {};
+  for (const lang of Object.keys(languageCounts)) {
+    languageStats[lang] = {
+      files: languageCounts[lang],
+      lines: languageLines[lang] || 0,
+      bytes: languageBytes[lang] || 0,
+      percentage: totalBytes > 0 ? Math.round((languageBytes[lang] || 0) / totalBytes * 10000) / 100 : 0,
+    };
   }
 
   const graph = buildDependencyGraph(analyses);
@@ -152,6 +189,7 @@ export async function analyzeDirectory(dir: string): Promise<AnalysisResult> {
       skippedFiles: files.length - analyses.length,
       errorFiles: errors.length,
       languages: languageCounts,
+      languageStats,
     },
   };
 }
@@ -282,11 +320,41 @@ export function formatAnalysisMarkdown(result: AnalysisResult): string {
   lines.push('## Codebase Analysis');
   lines.push('');
   lines.push(`**Files analyzed:** ${result.stats.analyzedFiles} / ${result.stats.totalFiles}`);
-  lines.push(`**Languages:** ${Object.entries(result.stats.languages).map(([l, c]) => `${l} (${c})`).join(', ')}`);
   if (result.stats.errorFiles > 0) {
     lines.push(`**Errors:** ${result.stats.errorFiles} files failed to parse`);
   }
   lines.push('');
+
+  // Language statistics (GitHub-style)
+  const langStats = result.stats.languageStats;
+  if (langStats && Object.keys(langStats).length > 0) {
+    lines.push('### Language Breakdown');
+    lines.push('');
+    // Sort by percentage descending
+    const sorted = Object.entries(langStats).sort((a, b) => b[1].percentage - a[1].percentage);
+    const totalLines = sorted.reduce((sum, [, s]) => sum + s.lines, 0);
+    const totalBytes = sorted.reduce((sum, [, s]) => sum + s.bytes, 0);
+    lines.push(`| Language | Files | Lines | Bytes | % |`);
+    lines.push(`|---|---|---|---|---|`);
+    for (const [lang, stats] of sorted) {
+      lines.push(`| ${lang} | ${stats.files} | ${stats.lines.toLocaleString()} | ${formatBytes(stats.bytes)} | ${stats.percentage}% |`);
+    }
+    lines.push(`| **Total** | **${result.stats.analyzedFiles}** | **${totalLines.toLocaleString()}** | **${formatBytes(totalBytes)}** | **100%** |`);
+    lines.push('');
+
+    // Visual bar (like GitHub)
+    lines.push('```');
+    const barWidth = 50;
+    let bar = '';
+    for (const [lang, stats] of sorted) {
+      const segLen = Math.max(1, Math.round(stats.percentage / 100 * barWidth));
+      const segChar = LANG_COLORS[lang] || '█';
+      bar += segChar.repeat(segLen);
+    }
+    lines.push(bar.slice(0, barWidth));
+    lines.push('```');
+    lines.push('');
+  }
 
   if (result.graph.edges.length > 0) {
     lines.push('### Dependency Graph');

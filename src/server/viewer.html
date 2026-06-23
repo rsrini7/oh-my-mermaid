@@ -300,6 +300,47 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); disp
   flex: 1; font-size: 13px; font-weight: 600; color: var(--text);
   font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Language Stats */
+.lang-stats {
+  padding: 0 14px 10px;
+  flex-shrink: 0;
+}
+.lang-stats-bar {
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+  margin-bottom: 6px;
+  background: var(--surface2);
+}
+.lang-stats-segment {
+  height: 100%;
+  min-width: 2px;
+  transition: width 0.3s ease;
+}
+.lang-stats-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.lang-stats-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+}
+.lang-stats-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.lang-stats-pct {
+  color: var(--text);
+  font-weight: 500;
+}
 /* Search */
 #search-box {
   position: relative;
@@ -788,6 +829,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); disp
   <div id="nav-title-bar">
     <div id="nav-title">omm</div>
   </div>
+  <div id="lang-stats" class="lang-stats"></div>
   <div id="search-box">
     <span id="search-icon">⌕</span>
     <input id="search-input" type="text" placeholder="Search elements…" autocomplete="off" />
