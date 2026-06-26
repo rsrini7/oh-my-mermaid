@@ -33,6 +33,8 @@ Then open your AI coding tool and use the `/omm-scan` skill:
 /omm-scan
 ```
 
+This will scan your codebase, generate architecture docs, and **auto-improve** until a quality score is reached (default 80).
+
 That's it. View the result:
 
 ```bash
@@ -77,28 +79,98 @@ Each element carries up to 7 fields: `description`, `diagram`, `context`, `const
 
 ## CLI
 
+### Core commands
+
 ```bash
-omm setup                          # Register skills with your AI tools
-omm init --template list           # Show available diagram templates
-omm init --template microservices  # Scaffold from a template (+ .gitignore + skills update)
-omm view [--port <p>] [--project <n>]  Open interactive viewer
-omm list [--project <name>]         List perspectives (auto-detects arch repo)
-omm show <element> [--project <n>]  Show all fields for an element
-omm tree [perspective]             # Print element tree
-omm validate [element]             # Validate diagram(s)
-omm validate --changed             # Validate only changed elements (CI)
-omm validate --changed --json      # JSON output for CI pipelines
-omm diff <element>                 # Show diagram diff (added/removed nodes)
-omm refs <element>                 # Show incoming/outgoing references
-omm export <element> [--format svg|png] [-o file]  # Export diagram
-omm tag <element> [add|remove|set] [tags]          # Manage element tags
-omm push [--to repo] [--commit]    # Push to architecture repository
-omm pull [--from repo] [--all]     # Pull from architecture repository
-omm share                          # Print arch repo URL (GitHub/GitLab)
-omm org list|switch|add|edit|remove  # Manage architecture repositories
-omm incremental                    # Plan a scoped re-scan based on git diff
-omm config language ko             # Set content language
-omm update                         # Update to latest version
+omm setup [platform|--list|--teardown]  Register/inspect skills for AI tools
+omm init [--template <name>]            Initialize .omm/ or scaffold from template
+omm update                             Update CLI + plugins to latest version
+omm config language <code>             Set content language (en, ko, ja, zh, tr)
+```
+
+### Reading & writing
+
+```bash
+omm list [--project <name>]             List perspectives (auto-detects arch repo)
+omm tree [perspective]                  Print element tree
+omm show <element>                      Show all fields for an element
+omm show <element> --type               Show element type (perspective/leaf/group)
+omm read <path> <field>                 Read a field to stdout
+omm write <path> <field> <text|->       Write a field
+omm status                              Show overview of all elements
+```
+
+### Validation
+
+```bash
+omm validate [path]                     Validate diagram(s) for syntax and conventions
+omm validate <path> --fix               Auto-fix fixable issues (writes back to file)
+omm validate --explain                  Document validation rules (full docs)
+omm validate --rules                    One-liner rule list
+omm validate --changed [--json]         Validate only changed elements (for CI)
+omm diff <element>                      Show diagram diff (added/removed nodes)
+omm refs <element>                      Show incoming/outgoing references
+omm ref-syntax                           Document the @class-name convention
+omm diagram-refs <path> [--json]         List @refs in a diagram with pass/fail status
+```
+
+### Quality
+
+```bash
+omm eval [--json] [--threshold <score>] Evaluate documentation quality
+omm eval --explain <element>            Show score breakdown for one element
+omm eval --explain <element> --json      Programmatic score breakdown (JSON)
+omm eval --suggest                       Top 10 elements to improve (by ROI)
+```
+
+### Viewer & flows
+
+```bash
+omm view [--port <p>] [--project <n>]    Open interactive viewer
+omm flows <element> [add|remove] [name] Manage flow animations
+omm tag <element> [add|remove|set|clear] [tags]
+                                       Manage element tags
+omm export <element> [--format svg|png|html] [-o file]
+                                       Export diagram as SVG, PNG, or self-contained HTML
+```
+
+### Incremental
+
+```bash
+omm incremental [--json]                Plan incremental /omm-scan updates
+omm incremental --mark <p> [--files ...] [--globs ...] [--replace] [--recursive]
+                                       Bootstrap source tracking for an element
+omm incremental --explain <element>      Show why element is stale/fresh/unknown
+omm incremental --record <p> [full|incremental]
+                                       Mark element as scanned at current commit
+```
+
+### Architecture repository
+
+```bash
+omm push [--to repo] [--commit]         Push .omm/ to architecture repository
+omm pull [--from repo] [--all]          Pull .omm/ from architecture repository
+omm arch init [--remote <url>]          Initialize architecture repository
+omm share                               Print arch repo URL (GitHub/GitLab)
+omm org list|switch|add|edit|remove    Manage architecture repositories
+```
+
+### Feedback
+
+```bash
+omm feedback                            Write .omm/feedback.md
+omm feedback --format json              Write .omm/feedback.json
+omm feedback --include "msg"            Add free-form message
+omm feedback --print                    Print to stdout
+omm feedback --out <path>               Custom output path
+```
+
+### Help
+
+```bash
+omm help                                Show full command list
+omm help <cmd>                          Drill down to per-command help
+omm <cmd> --help                        Per-command help (e.g. omm tag --help)
 ```
 
 Run `omm help` for the full command list.
@@ -109,11 +181,13 @@ Skills are commands you run **inside your AI coding tool** (not the terminal). T
 
 | Skill | What it does |
 | --- | --- |
-| `/omm-scan` | Analyze codebase → generate architecture docs |
+| `/omm-scan` | Analyze codebase → generate architecture docs (with auto-improve loop) |
+| `/omm-eval` | Evaluate quality and improve docs iteratively (uses `omm eval`) |
 | `/omm-guide` | Walk through existing architecture interactively |
 | `/omm-push` | Push architecture docs to shared repository |
 | `/omm-view` | Open the web viewer |
 | `/omm-tag` | Tag elements with labels for categorization |
+| `/omm-feedback` | Generate feedback report in `.omm/feedback.md` |
 
 ## Viewer Features
 
@@ -121,12 +195,13 @@ The web viewer (`omm view`) includes:
 
 | Feature | Description |
 | --- | --- |
-| **Diagram + Code tabs** | Toggle between rendered SVG and syntax-highlighted mermaid source |
+| **Diagram + Code + Rich tabs** | Toggle between rendered SVG, syntax-highlighted source, and interactive rich view with flow animation |
 | **Search** | Full-text search with fuzzy matching, `tag:` filter, and markdown-rendered snippets |
 | **Validate** | Click "Validate Diagram" in sidebar to check for errors/warnings inline |
-| **Export** | Download diagrams as SVG or PNG with project title. Theme-aware background |
-| **Visual diff** | Show added/removed nodes between diagram versions |
+| **Export** | Download diagrams as SVG, PNG, or self-contained HTML with project title |
+| **Flow animation** | Click flow chips to animate paths through the diagram (edges glow, nodes highlight) |
 | **Relationship graph** | Bird's-eye view of cross-perspective connections (◈ button) |
+| **Network graph** | D3 force-directed view of all elements and connections (⬡ button) |
 | **Version history** | Timeline slider to scrub through past diagram versions |
 | **Keyboard shortcuts** | `/` search, `F` fit, `T` theme, `←→` navigate, `Esc` close |
 | **Resizable panels** | Drag to resize left nav and right sidebar |
@@ -136,6 +211,149 @@ The web viewer (`omm view`) includes:
 | **Auto-width nav** | Left panel auto-sizes to fit the longest perspective name |
 | **Viewport-responsive fonts** | Font sizes scale with monitor width for readability |
 | **Diagram templates** | Scaffold from pre-built architectures via `omm init --template` |
+
+## Flows
+
+Flows define animated paths through your diagrams. Each flow is a sequence of nodes and edges that highlight together when activated.
+
+### Creating flows
+
+```bash
+# List flows for an element
+omm flows overall-architecture
+
+# Add a flow (reads YAML from stdin)
+omm flows overall-architecture add "Request Path" <<'EOF'
+name: Request Path
+description: How a request flows through the system
+steps:
+  - node: client
+  - edge: client->gateway
+  - node: gateway
+  - edge: gateway->service
+  - node: service
+EOF
+
+# Remove a flow
+omm flows overall-architecture remove "Request Path"
+```
+
+### Flow YAML format
+
+```yaml
+name: Install
+description: Developer installs skills via CLI
+steps:
+  - node: user          # highlight this node
+  - edge: user->cli     # highlight this edge (from->to)
+  - node: cli
+  - edge: cli->output
+  - node: output
+```
+
+- `node` steps reference node IDs from the diagram
+- `edge` steps reference `from->to` where from/to are node IDs
+- Steps are ordered — they define the visual animation sequence
+
+### Using flows in the viewer
+
+1. Open `omm view`
+2. Click any element — flow chips appear at the bottom
+3. Click a chip to animate the path
+4. Click again to deactivate
+
+### Auto-generation
+
+The `/omm-scan` skill generates flows automatically during scan. It traces paths from entry points to terminal nodes and creates 2-5 flows per perspective.
+
+## Feedback Loop
+
+Generate a feedback report inside `.omm/` to share with the omm maintainer:
+
+```bash
+omm feedback                              # writes .omm/feedback.md
+omm feedback --format json                # writes .omm/feedback.json
+omm feedback --include "your message"     # add free-form context
+omm feedback --print                      # print to stdout
+```
+
+The generated file contains:
+
+- omm version + git commit/branch
+- Project state (element count, eval score, coverage metrics)
+- Lowest-scoring elements (top 10)
+- Recent issues from eval
+- Suggestions for improvement
+- Your message (if `--include` was used)
+
+The file lives in `.omm/` so it travels with the project. Share it with the maintainer to improve omm itself.
+
+## Quality Evaluation
+
+Use `omm eval` to check the quality and coverage of your `.omm/` documentation:
+
+```bash
+omm eval                          # quality report
+omm eval --json                   # machine-readable output
+omm eval --threshold 80           # exit 1 if score < 80 (CI/CD)
+```
+
+Report includes:
+
+- **Overall score** (0-100) — weighted by fields, diagram, flows, refs, children
+- **Field coverage** — % of fields filled across all elements
+- **Diagram coverage** — % with valid mermaid diagrams
+- **Flow coverage** — % with flow definitions
+- **Ref integrity** — % with cross-references
+- **Issues** — errors, warnings, and info per element
+- **Suggestions** — improvements for low-scoring areas
+- **Lowest scoring elements** — sorted worst-first
+
+Use `--threshold` in CI/CD pipelines to enforce a minimum quality bar.
+
+## Graph Views
+
+The viewer has two graph visualization modes:
+
+### Relationship Graph (◈ button)
+
+- Uses dagre hierarchical layout (left-to-right)
+- Shows cross-perspective connections only
+- Static — click nodes to navigate
+- Best for: understanding perspective overlap, documentation
+
+### Network Graph (⬡ button)
+
+- Uses D3 force-directed layout
+- Shows ALL elements (perspectives + children) and their connections
+- Interactive — drag nodes to rearrange, zoom/pan
+- Animated — nodes settle into position organically
+- Color-coded by perspective
+- Size-coded by connection count
+- Best for: exploration, finding clusters, presentations
+
+Both views are toggled with their respective buttons in the floating controls.
+
+## HTML Export
+
+Export any element as a **self-contained HTML file** with interactive SVG, flow animation, dark mode, and clickable detail cards.
+
+```bash
+# CLI
+omm export command-surface --format html -o diagram.html
+
+# Viewer
+# Click any element → ↓ button → HTML
+```
+
+The HTML file:
+- Is completely self-contained (no external dependencies except dagre.js CDN)
+- Includes dark/light theme toggle with `prefers-color-scheme` detection
+- Has flow animation chips (if flows are defined)
+- Shows detail cards on node click (description, context, concern, constraint)
+- Works offline after first load (dagre.js is cached by the browser)
+
+> **Note:** When opening exported HTML files from `file://` URLs, browsers may show a security warning in the console. This is harmless — the diagram renders correctly. The warning disappears when served from a web server.
 
 ## Project picker
 

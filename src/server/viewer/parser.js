@@ -1,7 +1,7 @@
 import { esc, r1, tw, fmtLabel } from './helpers.js';
 
-// ── isDark — read from body class (avoids circular import with theme.js) ──
-function isDark() { return !document.body.classList.contains('light'); }
+// ── isDark — read from html class (avoids circular import with theme.js) ──
+function isDark() { return !document.documentElement.classList.contains('light'); }
 
 // ── flowchart parser ──────────────────────────────────────
 export function parseFlowchart(raw) {
@@ -62,21 +62,16 @@ export function parseFlowchart(raw) {
 }
 
 // ── node style ────────────────────────────────────────────
+function cv(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
 export function nodeStyle(node) {
   const c = node.cls||'';
-  if (isDark()) {
-    if (c==='external') return {bg:'#313244',border:'#585b70',text:'#cdd6f4'};
-    if (c==='concern')  return {bg:'#45233a',border:'#f38ba8',text:'#f38ba8'};
-    if (c==='entry')    return {bg:'#1e3a5f',border:'#89b4fa',text:'#89b4fa'};
-    if (c==='store')    return {bg:'#1e3a2e',border:'#a6e3a1',text:'#a6e3a1'};
-    return {bg:'#18181b',border:'#3f3f46',text:'#e4e4e7'};
-  } else {
-    if (c==='external') return {bg:'#e8e8ec',border:'#999',text:'#333',dash:'6 3'};
-    if (c==='concern')  return {bg:'#fce4ec',border:'#e57373',text:'#b71c1c'};
-    if (c==='entry')    return {bg:'#e3f2fd',border:'#64b5f6',text:'#0d47a1'};
-    if (c==='store')    return {bg:'#e8f5e9',border:'#81c784',text:'#1b5e20'};
-    return {bg:'#fff',border:'#bbb',text:'#333'};
-  }
+  if (c==='external') return {bg:cv('--node-external-bg'),border:cv('--node-external-border'),text:cv('--node-external-text'),dash:'6 3'};
+  if (c==='concern')  return {bg:cv('--node-concern-bg'),border:cv('--node-concern-border'),text:cv('--node-concern-text')};
+  if (c==='entry')    return {bg:cv('--node-entry-bg'),border:cv('--node-entry-border'),text:cv('--node-entry-text')};
+  if (c==='store')    return {bg:cv('--node-store-bg'),border:cv('--node-store-border'),text:cv('--node-store-text')};
+  return {bg:cv('--node-default-bg'),border:cv('--node-default-border'),text:cv('--node-default-text')};
 }
 
 // ── smooth path through all Dagre waypoints ───────────────

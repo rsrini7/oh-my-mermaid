@@ -6,6 +6,126 @@ import { setupExport } from './viewer/export.js';
 // theme() shim — returns themeColors() for backward compat
 function theme() { return themeColors(); }
 
+// ── flow animation state ─────────────────────────────────
+let _flowsData = {};  // elementPath -> FlowDef[]
+let _activeFlow = null;  // currently active flow name
+
+async function loadFlows(elementPath) {
+  try {
+    const res = await api(`/api/class/${encodeURIComponent(elementPath)}/flows`);
+    _flowsData[elementPath] = res?.flows || [];
+  } catch {
+    _flowsData[elementPath] = [];
+  }
+}
+
+function renderFlowBar(elementPath) {
+  const bar = document.getElementById('flow-bar');
+  if (!bar) return;
+  const flows = _flowsData[elementPath] || [];
+  // Clear existing chips (keep label)
+  bar.innerHTML = '<span class="flow-bar-label">Flows</span>';
+  if (flows.length === 0) {
+    bar.classList.remove('has-flows');
+    deactivateFlow();
+    return;
+  }
+  bar.classList.add('has-flows');
+  for (const f of flows) {
+    const chip = document.createElement('button');
+    chip.className = 'flow-chip' + (_activeFlow === f.name ? ' active' : '');
+    chip.textContent = f.name;
+    chip.title = f.description || f.name;
+    chip.onclick = () => toggleFlow(elementPath, f.name);
+    bar.appendChild(chip);
+  }
+}
+
+function toggleFlow(elementPath, flowName) {
+  if (_activeFlow === flowName) {
+    deactivateFlow();
+    return;
+  }
+  const flows = _flowsData[elementPath] || [];
+  const flow = flows.find(f => f.name === flowName);
+  if (!flow) return;
+  _activeFlow = flowName;
+
+  const canvasWrap = document.getElementById('canvas-wrap');
+  canvasWrap.classList.add('flowing');
+
+  // Collect node and edge IDs to highlight
+  const litNodes = new Set();
+  const litEdges = new Set();
+  for (const step of flow.steps) {
+    if (step.node) litNodes.add(step.node);
+    if (step.edge) {
+      const [from, to] = step.edge.split('->');
+      if (from && to) litEdges.add(`${from}->${to}`);
+    }
+  }
+
+  // Highlight nodes
+  document.querySelectorAll('#canvas .reg-node, #canvas .grp-node').forEach(el => {
+    const cls = el.getAttribute('data-cls');
+    // Match by full path or short name
+    const shortName = cls ? cls.split('/').pop() : '';
+    if (litNodes.has(cls) || litNodes.has(shortName)) {
+      el.classList.add('flow-lit');
+    } else {
+      el.classList.remove('flow-lit');
+    }
+  });
+
+  // Highlight edges — match by exact from->to key or by node membership
+  document.querySelectorAll('#canvas .edge-path').forEach(el => {
+    const from = el.getAttribute('data-from');
+    const to = el.getAttribute('data-to');
+    const key = `${from}->${to}`;
+    const fromShort = from ? from.split('/').pop() : '';
+    const toShort = to ? to.split('/').pop() : '';
+    const keyShort = `${fromShort}->${toShort}`;
+    const isLit = litEdges.has(key) || litEdges.has(keyShort) ||
+      (litNodes.has(from) && litNodes.has(to)) ||
+      (litNodes.has(fromShort) && litNodes.has(toShort));
+    if (isLit) {
+      el.classList.add('flow-lit');
+    } else {
+      el.classList.remove('flow-lit');
+    }
+  });
+  // Highlight edge labels using data-from/data-to attributes
+  document.querySelectorAll('#canvas .edge-label').forEach(el => {
+    const from = el.getAttribute('data-from');
+    const to = el.getAttribute('data-to');
+    const key = `${from}->${to}`;
+    const fromShort = from ? from.split('/').pop() : '';
+    const toShort = to ? to.split('/').pop() : '';
+    const keyShort = `${fromShort}->${toShort}`;
+    const isLit = litEdges.has(key) || litEdges.has(keyShort) ||
+      (litNodes.has(from) && litNodes.has(to)) ||
+      (litNodes.has(fromShort) && litNodes.has(toShort));
+    if (isLit) {
+      el.classList.add('flow-lit');
+    } else {
+      el.classList.remove('flow-lit');
+    }
+  });
+
+  // Update chip active state
+  document.querySelectorAll('.flow-chip').forEach(chip => {
+    chip.classList.toggle('active', chip.textContent === flowName);
+  });
+}
+
+function deactivateFlow() {
+  _activeFlow = null;
+  const canvasWrap = document.getElementById('canvas-wrap');
+  canvasWrap.classList.remove('flowing');
+  document.querySelectorAll('.flow-lit').forEach(el => el.classList.remove('flow-lit'));
+  document.querySelectorAll('.flow-chip').forEach(chip => chip.classList.remove('active'));
+}
+
 // ── render one class group (recursive) ────────────────────
 // _expandedGlobal prevents same class from expanding in multiple branches
 let _expandedGlobal = new Set();
@@ -32,7 +152,8 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
   const nodeDims  = {}; // nodeId -> { width, height }
 
   // Determine children of current element for subgroup resolution
-  const currentChildren = (level === 0 ? (childrenByPerspective[cls] || []) : (classesData[cls]?.children || []));
+  // Use FULL path to check diagram — avoids short-name collision
+  const currentChildren = (level === 0 ? (childrenByPerspective[cls] || []) : (classesData[scopedPath]?.children || classesData[cls]?.children || []));
 
   for (const n of nodes) {
     // Resolve subgroup: @ref (legacy) OR node ID is a child of current element with its own diagram
@@ -186,7 +307,7 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
     if (e.label) {
       const lw = tw(e.label,'10px Inter')+12;
       const mx=r1(mid.x), my=r1(mid.y);
-      edgeLabels += `<g class="edge-label${hoverClass}" opacity="${opacity}"><rect x="${mx-lw/2}" y="${my-8}" width="${lw}" height="16" rx="3" fill="${th.edgeLabelBg}"/>
+      edgeLabels += `<g class="edge-label${hoverClass}" opacity="${opacity}" data-from="${esc(e.from)}" data-to="${esc(e.to)}"><rect x="${mx-lw/2}" y="${my-8}" width="${lw}" height="16" rx="3" fill="${th.edgeLabelBg}"/>
         <text x="${mx}" y="${my+4}" text-anchor="middle" font-family="Inter,system-ui" font-size="10" fill="${th.edgeLabelText}">${esc(e.label)}</text></g>`;
     }
   });
@@ -208,11 +329,11 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
       const PAD = 12;
       const boxW = sg.W * fs + PAD * 2, boxH = sg.H * fs + PAD * 2;
       const clipId = `${uid}clip_${n.id}`;
-      svg += `<defs><clipPath id="${clipId}"><rect x="-2" y="-16" width="${r1(boxW+4)}" height="${r1(boxH+18)}" rx="6"/></clipPath></defs>`;
+      const _slW = Math.min(boxW - 6, tw(fmtLabel(sg.cls), '600 9px "Plus Jakarta Sans",Inter,system-ui') + 14);
+      svg += `<defs><clipPath id="${clipId}"><rect x="-2" y="-16" width="${r1(Math.max(boxW, _slW + 7) + 4)}" height="${r1(boxH + 18)}" rx="6"/></clipPath></defs>`;
       svg += `<g class="grp-node" clip-path="url(#${clipId})" onclick="event.stopPropagation();window.__openSb('${scopedId}')" data-cls="${scopedId}" data-depth="${level+1}" transform="translate(${nx},${ny})">`;
       svg += `<rect class="grp-border" width="${r1(boxW)}" height="${r1(boxH)}" rx="5"
         fill="${th.subFill}" stroke="${refSubStroke}" stroke-width="2"/>`;
-      const _slW = tw(fmtLabel(sg.cls), '600 9px "Plus Jakarta Sans",Inter,system-ui') + 12;
       svg += `<rect class="grp-label-top grp-label-bg" x="5" y="-7" width="${_slW}" height="14" rx="2" fill="${th.subFill}" opacity="1"/>`;
       svg += `<text class="grp-label-top" x="10" y="2" font-family="&quot;Plus Jakarta Sans&quot;,Inter,system-ui" font-size="9" font-weight="600"
         fill="${th.subLabelFill}" letter-spacing="0.05em">${esc(fmtLabel(sg.cls))}</text>`;
@@ -433,7 +554,7 @@ function applyTransform() {
   const targetPx = 13;
   const fs = Math.min(72, Math.max(10, targetPx / vpScale));
   const fsStr = (Math.round(fs * 10) / 10).toString();
-  const labelFill = isDark() ? (vpScale < 0.5 ? '#ccc' : '#cbd5e1') : (vpScale < 0.5 ? '#333' : '#475569');
+  const labelFill = getComputedStyle(document.documentElement).getPropertyValue(vpScale < 0.5 ? '--svg-label-fill-dim' : '--svg-label-fill').trim() || (isDark() ? '#cbd5e1' : '#475569');
   document.querySelectorAll('#canvas .grp-label-top').forEach(el => {
     if (el.tagName === 'text') {
       el.setAttribute('font-size', fsStr);
@@ -646,7 +767,7 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeSidebar(); closeSearch(); searchInput.blur(); }
   if (e.key === '/' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); searchInput.focus(); searchInput.select(); }
   if (e.key === 'f' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); centerView(); }
-  if (e.key === 't' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); toggleTheme(); rebuildCanvas(); }
+  if (e.key === 't' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); window.toggleTheme(); }
   // Arrow keys: navigate elements in the sidebar
   if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.metaKey && !e.ctrlKey) {
     navigateElement(e.key === 'ArrowRight' ? 1 : -1);
@@ -800,6 +921,22 @@ window.__openSb = function(cls) {
       _savedViewport = null;
     }
   }
+  // If in network mode, exit network mode first
+  if (_networkMode) {
+    _networkMode = false;
+    const btn = document.getElementById('network-btn');
+    if (btn) btn.classList.remove('active');
+    canvasWrap.classList.remove('network-mode');
+    if (_networkSimulation) { _networkSimulation.stop(); _networkSimulation = null; }
+    rebuildCanvas();
+    if (_savedViewport) {
+      vpX = _savedViewport.vpX;
+      vpY = _savedViewport.vpY;
+      vpScale = _savedViewport.vpScale;
+      applyTransform();
+      _savedViewport = null;
+    }
+  }
 
   var dataKey = resolveDataKey(cls);
   if (!dataKey || !classesData[dataKey]) return;
@@ -815,6 +952,8 @@ window.__openSb = function(cls) {
   if (activeNav) activeNav.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   var sidebarAlreadyOpen = sidebar.classList.contains('open');
   openSidebar(dataKey, cls);
+  // Load and render flows for this element
+  loadFlows(cls).then(() => renderFlowBar(cls));
   if (sidebarAlreadyOpen) {
     focusGroup(cls);
   } else {
@@ -845,9 +984,11 @@ function openSidebar(cls, origCls) {
       <div class="sb-diagram-toggle">
         <button class="sb-diagram-tab active" onclick="window.__showDiagramTab('diagram')">Diagram</button>
         <button class="sb-diagram-tab" onclick="window.__showDiagramTab('code')">Code</button>
+        <button class="sb-diagram-tab" onclick="window.__showDiagramTab('rich')">Rich</button>
       </div>
-      <div class="sb-diagram-view">${svg || '<div style="padding:16px;color:#666">Could not render diagram</div>'}</div>
+      <div class="sb-diagram-view">${svg || '<div style="padding:16px;color:var(--text-muted)">Could not render diagram</div>'}</div>
       <div class="sb-code-view" style="display:none"><pre class="sb-code-pre">${codeHtml}</pre></div>
+      <div class="sb-rich-view" style="display:none"><div class="sb-rich-canvas" id="sb-rich-canvas"></div></div>
     `;
   // Timeline slider if history exists
     const history = data.meta?.diagram_history ?? [];
@@ -900,7 +1041,8 @@ function openSidebar(cls, origCls) {
     } catch {}
   }
   const complexity = diagramNodes > 15 ? 'high' : diagramNodes > 8 ? 'medium' : 'low';
-  const complexityColor = complexity === 'high' ? '#ef4444' : complexity === 'medium' ? '#fbbf24' : '#22c55e';
+  const _cv = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const complexityColor = complexity === 'high' ? (_cv('--error') || '#ef4444') : complexity === 'medium' ? (_cv('--warning') || '#fbbf24') : (_cv('--success') || '#22c55e');
   html += `<div class="sb-sec"><div class="sb-sec-title">Metrics</div><div class="sb-metrics">
     <span class="sb-metric"><span class="sb-metric-value">${coverage}%</span> coverage</span>
     <span class="sb-metric"><span class="sb-metric-value">${totalWords}</span> words</span>
@@ -909,10 +1051,21 @@ function openSidebar(cls, origCls) {
     ${children.length ? `<span class="sb-metric"><span class="sb-metric-value">${children.length}</span> children</span>` : ''}
   </div></div>`;
 
-  // Tags
+  // Tags — filter to strings only, mark corrupt ones for the user
   if (data.meta?.tags?.length) {
-    const tagHtml = data.meta.tags.map(t => `<span class="sb-tag">${esc(t)}</span>`).join('');
-    html += `<div class="sb-sec"><div class="sb-sec-title">Tags</div><div class="sb-tags">${tagHtml}</div></div>`;
+    const validTags = [];
+    let corruptCount = 0;
+    for (const t of data.meta.tags) {
+      if (typeof t === 'string') validTags.push(t);
+      else corruptCount++;
+    }
+    if (validTags.length || corruptCount > 0) {
+      const tagHtml = validTags.map(t => `<span class="sb-tag">${esc(t)}</span>`).join('');
+      const corruptHint = corruptCount > 0
+        ? ` <span style="color:var(--warning);font-size:11px">(${corruptCount} corrupt — run <code>omm eval</code> to fix)</span>`
+        : '';
+      html += `<div class="sb-sec"><div class="sb-sec-title">Tags</div><div class="sb-tags">${tagHtml}${corruptHint}</div></div>`;
+    }
   }
   html+=sec('Description',md(data.description));
   html+=sec('Constraints',md(data.constraint));
@@ -968,6 +1121,9 @@ function closeSidebar() {
   document.querySelectorAll('#canvas [data-cls].focus-exempt').forEach(el => el.classList.remove('focus-exempt'));
   selectedCls=null;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  deactivateFlow();
+  const flowBar = document.getElementById('flow-bar');
+  if (flowBar) flowBar.classList.remove('has-flows');
 }
 
 /** Navigate to next/prev element (arrow key support) */
@@ -1039,9 +1195,8 @@ function buildCanvas(classes, classesData, refsData) {
   // Top-level = not referenced, OR referenced but has more outgoing refs than any referrer (cycle breaker)
   let topLevel = classes.filter(c => inCount[c] === 0);
   if (!topLevel.length) {
-    // All classes have incoming refs (circular). Pick the one with most outgoing refs as root.
-    const maxOut = Math.max(...classes.map(c => outCount[c]));
-    topLevel = classes.filter(c => outCount[c] === maxOut);
+    // All classes have incoming refs (circular). Render all as independent groups.
+    topLevel = [...classes];
   }
   const roots = topLevel;
 
@@ -1085,7 +1240,7 @@ function buildCanvas(classes, classesData, refsData) {
     innerSVG += `<g class="grp-node" data-cls="${esc(g.cls)}" data-depth="0" transform="translate(${tx},${ty})" onclick="event.stopPropagation();window.__openSb('${esc(g.cls)}')">`;
     innerSVG += `<rect class="grp-border" width="${g.W}" height="${g.H}" rx="8"
       fill="${th.groupFill}" stroke="${th.groupStroke}" stroke-width="2"/>`;
-    const _lblW = tw(fmtLabel(g.cls), '600 10px "Plus Jakarta Sans",Inter,system-ui') + 14;
+    const _lblW = Math.min(g.W - 8, tw(fmtLabel(g.cls), '600 10px "Plus Jakarta Sans",Inter,system-ui') + 16);
     innerSVG += `<rect class="grp-label-top grp-label-bg" x="6" y="-10" width="${_lblW}" height="20" rx="2" fill="${th.groupFill}" opacity="1"/>`;
     innerSVG += `<text class="grp-label-top" x="12" y="3" font-family="&quot;Plus Jakarta Sans&quot;,Inter,system-ui" font-size="10" font-weight="600"
       fill="${th.grpLabelFill}" letter-spacing="0.05em">${esc(fmtLabel(g.cls))}</text>`;
@@ -1112,7 +1267,7 @@ function postRender() {
     if (existing) existing.remove();
     defs.insertAdjacentHTML('beforeend',
       '<filter id="glow"><feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur"/>' +
-      '<feFlood flood-color="#818cf8" flood-opacity="0.4" result="color"/>' +
+      '<feFlood flood-color="' + (getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#818cf8') + '" flood-opacity="0.4" result="color"/>' +
       '<feComposite in="color" in2="blur" operator="in" result="shadow"/>' +
       '<feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'
     );
@@ -1388,6 +1543,10 @@ async function init() {
     }
   }
 
+  // Pre-load flows for all perspectives
+  const flowLoads = classes.map(c => loadFlows(c));
+  await Promise.all(flowLoads);
+
   // Pre-load nested element data for all children
   const nodeLoads = [];
   for (const persp of Object.keys(childrenByPerspective)) {
@@ -1649,17 +1808,29 @@ document.addEventListener('click', (e) => {
 
 
 // ── window globals for inline onclick handlers ────────────
-window.toggleTheme = function() { toggleTheme(); rebuildCanvas(); };
+window.toggleTheme = function() {
+  toggleTheme();
+  if (_networkMode) {
+    renderNetworkGraph();
+  } else {
+    rebuildCanvas();
+  }
+};
 window.__showDiagramTab = function(tab) {
   const container = document.getElementById('sb-diagram');
   if (!container) return;
   container.querySelectorAll('.sb-diagram-tab').forEach((t, i) => {
-    t.classList.toggle('active', (tab === 'diagram' && i === 0) || (tab === 'code' && i === 1));
+    t.classList.toggle('active', (tab === 'diagram' && i === 0) || (tab === 'code' && i === 1) || (tab === 'rich' && i === 2));
   });
   const diagramView = container.querySelector('.sb-diagram-view');
   const codeView = container.querySelector('.sb-code-view');
+  const richView = container.querySelector('.sb-rich-view');
   if (diagramView) diagramView.style.display = tab === 'diagram' ? 'block' : 'none';
   if (codeView) codeView.style.display = tab === 'code' ? 'block' : 'none';
+  if (richView) {
+    richView.style.display = tab === 'rich' ? 'block' : 'none';
+    if (tab === 'rich') renderRichView();
+  }
 };
 window.__scrubTimeline = function(idx) {
   const versions = window.__timelineVersions;
@@ -1679,7 +1850,7 @@ window.__scrubTimeline = function(idx) {
   }
   if (diagramView) {
     const svg = renderFlatSVG(v.diagram);
-    diagramView.innerHTML = svg || '<div style="padding:16px;color:#666">Could not render diagram</div>';
+    diagramView.innerHTML = svg || '<div style="padding:16px;color:var(--text-muted)">Could not render diagram</div>';
   }
   if (codeView) {
     codeView.querySelector('pre').innerHTML = highlightMermaid(v.diagram);
@@ -1690,10 +1861,135 @@ window.__scrubTimeline = function(idx) {
     info.textContent = isLast ? 'Current' : `${date}${v.commit ? ' · ' + v.commit : ''}`;
   }
 };
+
+// ── Rich view: interactive SVG in sidebar ──
+var _richFlows = {};
+var _richActiveFlow = -1;
+
+function renderRichView() {
+  var canvas = document.getElementById('sb-rich-canvas');
+  if (!canvas) return;
+  var cls = selectedCls;
+  if (!cls) { canvas.innerHTML = '<div style="padding:16px;color:var(--text-muted)">Select an element</div>'; return; }
+  var dataKey = resolveDataKey(cls);
+  var data = dataKey ? classesData[dataKey] : null;
+  if (!data || !data.diagram) { canvas.innerHTML = '<div style="padding:16px;color:var(--text-muted)">No diagram</div>'; return; }
+
+  // Render SVG using same parser as main canvas
+  var parsed = parseFlowchart(data.diagram);
+  if (!parsed || !parsed.nodes.length) { canvas.innerHTML = '<div style="padding:16px;color:var(--text-muted)">Empty diagram</div>'; return; }
+
+  var g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: parsed.rankdir, nodesep: 36, ranksep: 48, marginx: 20, marginy: 20 });
+  g.setDefaultEdgeLabel(function() { return {}; });
+  var nDims = {};
+  parsed.nodes.forEach(function(n) {
+    var lbl = n.label.replace(/^@/, '');
+    var parts = lbl.split('\n');
+    var w = Math.min(180, Math.max(60, tw(parts[0], '11px Inter,system-ui') + 32));
+    var h = n.shape === 'diamond' ? 32 : 28 + (parts[1] ? 16 : 0);
+    nDims[n.id] = { w: w, h: h };
+    g.setNode(n.id, { width: w, height: h });
+  });
+  parsed.edges.forEach(function(e) { if (g.hasNode(e.from) && g.hasNode(e.to)) g.setEdge(e.from, e.to); });
+  try { dagre.layout(g); } catch(err) { canvas.innerHTML = '<div style="padding:16px;color:var(--text-muted)">Layout error</div>'; return; }
+  var gi = g.graph();
+  var W = r1(gi.width + 40), H = r1(gi.height + 30);
+
+  var ec = 'var(--svg-edge-0)';
+  var svg = '';
+  parsed.edges.forEach(function(e, i) {
+    var ed = g.edge(e.from, e.to); if (!ed || !ed.points || !ed.points.length) return;
+    var d = smoothPath(ed.points);
+    var mid = ed.points[Math.floor(ed.points.length / 2)];
+    svg += '<path class="edge" d="' + d + '" stroke="' + ec + '" stroke-width="1.5" fill="none" data-from="' + esc(e.from) + '" data-to="' + esc(e.to) + '"/>';
+    if (e.label) {
+      var lw = tw(e.label, '9px Inter') + 8;
+      svg += '<g class="elbl" data-from="' + esc(e.from) + '" data-to="' + esc(e.to) + '"><rect x="' + (mid.x - lw / 2) + '" y="' + (mid.y - 7) + '" width="' + lw + '" height="14" rx="3" fill="var(--svg-edge-label-bg)"/><text x="' + mid.x + '" y="' + (mid.y + 4) + '" text-anchor="middle" font-size="9" fill="var(--svg-edge-label-text)">' + esc(e.label) + '</text></g>';
+    }
+  });
+  parsed.nodes.forEach(function(n) {
+    var pos = g.node(n.id); if (!pos) return;
+    var dim = nDims[n.id];
+    var nx = r1(pos.x - dim.w / 2), ny = r1(pos.y - dim.h / 2);
+    var st = nodeStyle(n);
+    var raw = n.label.replace(/^@/, '');
+    var lp = raw.split('\n');
+    var cx = r1(pos.x), cy = r1(pos.y);
+    var shape = '<rect x="' + nx + '" y="' + ny + '" width="' + dim.w + '" height="' + dim.h + '" rx="4" fill="' + st.bg + '" stroke="' + st.border + '" stroke-width="1.5"/>';
+    svg += '<g class="node" data-id="' + esc(n.id) + '">' + shape;
+    if (lp[1]) {
+      svg += '<text x="' + cx + '" y="' + (cy - 5) + '" text-anchor="middle" font-size="11" font-weight="600" fill="' + st.text + '">' + esc(lp[0]) + '</text>';
+      svg += '<text x="' + cx + '" y="' + (cy + 8) + '" text-anchor="middle" font-size="8" fill="' + st.text + '" opacity="0.45">' + esc(lp[1]) + '</text>';
+    } else {
+      svg += '<text x="' + cx + '" y="' + cy + '" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="600" fill="' + st.text + '">' + esc(lp[0]) + '</text>';
+    }
+    svg += '</g>';
+  });
+
+  var flowBar = '';
+  var flows = _flowsData[cls] || [];
+  if (flows.length > 0) {
+    flowBar = '<div class="flow-bar" style="position:static;border-top:1px solid var(--border-muted)"><span class="flow-bar-label">Flows</span>';
+    flows.forEach(function(f, i) {
+      flowBar += '<button class="flow-chip" onclick="window.__richToggleFlow(' + i + ')">' + esc(f.name) + '</button>';
+    });
+    flowBar += '</div>';
+  }
+
+  canvas.innerHTML = flowBar + '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block;overflow:visible">' + svg + '</svg>';
+}
+
+window.__richToggleFlow = function(idx) {
+  var canvas = document.getElementById('sb-rich-canvas');
+  if (!canvas) return;
+  var svgEl = canvas.querySelector('svg');
+  if (!svgEl) return;
+  var cls = selectedCls;
+  var flows = _flowsData[cls] || [];
+
+  if (_richActiveFlow === idx) {
+    _richActiveFlow = -1;
+    svgEl.classList.remove('flowing');
+    svgEl.querySelectorAll('.flow-lit').forEach(function(el) { el.classList.remove('flow-lit'); });
+    canvas.querySelectorAll('.flow-chip').forEach(function(c) { c.classList.remove('active'); });
+    return;
+  }
+  _richActiveFlow = idx;
+  var flow = flows[idx]; if (!flow) return;
+  svgEl.classList.add('flowing');
+
+  var litNodes = new Set(); var litEdges = new Set();
+  flow.steps.forEach(function(s) {
+    if (s.node) litNodes.add(s.node);
+    if (s.edge) { var p = s.edge.split('->'); if (p[0] && p[1]) litEdges.add(p[0] + '->' + p[1]); }
+  });
+  svgEl.querySelectorAll('.node').forEach(function(el) {
+    var id = el.getAttribute('data-id');
+    var short = id ? id.split('/').pop() : '';
+    if (litNodes.has(id) || litNodes.has(short)) el.classList.add('flow-lit'); else el.classList.remove('flow-lit');
+  });
+  svgEl.querySelectorAll('.edge').forEach(function(el) {
+    var from = el.getAttribute('data-from'), to = el.getAttribute('data-to');
+    var key = from + '->' + to;
+    var fromS = from ? from.split('/').pop() : '';
+    var toS = to ? to.split('/').pop() : '';
+    if (litEdges.has(key) || litEdges.has(fromS + '->' + toS)) el.classList.add('flow-lit'); else el.classList.remove('flow-lit');
+  });
+  svgEl.querySelectorAll('.elbl').forEach(function(el) {
+    var from = el.getAttribute('data-from'), to = el.getAttribute('data-to');
+    var key = from + '->' + to;
+    var fromS = from ? from.split('/').pop() : '';
+    var toS = to ? to.split('/').pop() : '';
+    if (litEdges.has(key) || litEdges.has(fromS + '->' + toS)) el.classList.add('flow-lit'); else el.classList.remove('flow-lit');
+  });
+  canvas.querySelectorAll('.flow-chip').forEach(function(c, i) { c.classList.toggle('active', i === idx); });
+};
+
 window.__validateElement = async function(cls) {
   const container = document.getElementById('sb-validate-results');
   if (!container) return;
-  container.innerHTML = '<div style="padding:4px 0;font-size:11px;color:#666">Validating…</div>';
+  container.innerHTML = '<div style="padding:4px 0;font-size:11px;color:var(--text-muted)">Validating…</div>';
   try {
     const res = await fetch(`/api/class/${encodeURIComponent(cls)}/validate`);
     const data = await res.json();
@@ -1720,7 +2016,7 @@ window.__validateElement = async function(cls) {
     }
     container.innerHTML = html;
   } catch {
-    container.innerHTML = '<div style="padding:4px 0;font-size:11px;color:#ef4444">Validation failed</div>';
+    container.innerHTML = '<div style="padding:4px 0;font-size:11px;color:var(--error)">Validation failed</div>';
   }
 };
 window.toggleMobileNav = function() {
@@ -1750,7 +2046,7 @@ window.__toggleDiff = async function(cls) {
     const res = await fetch(`/api/class/${encodeURIComponent(cls)}/diff`);
     const diff = await res.json();
     if (!diff.has_changes) {
-      diagramView.innerHTML = (renderFlatSVG(classesData[cls]?.diagram) || '') + '<div style="padding:8px;text-align:center;color:#666;font-size:12px">No changes detected</div>';
+      diagramView.innerHTML = (renderFlatSVG(classesData[cls]?.diagram) || '') + '<div style="padding:8px;text-align:center;color:var(--text-muted);font-size:12px">No changes detected</div>';
       if (btn) { btn.textContent = 'No Changes'; btn.disabled = false; }
       return;
     }
@@ -1760,10 +2056,10 @@ window.__toggleDiff = async function(cls) {
     if (!svg) return;
     const addedNodes = new Set(diff.added_nodes || []);
     const diffStyles = `<defs><style>
-      .diff-added .nshape { stroke: #22c55e !important; stroke-width: 3px !important; filter: drop-shadow(0 0 4px rgba(34,197,94,0.5)); }
-      .diff-removed .nshape { stroke: #ef4444 !important; stroke-width: 3px !important; stroke-dasharray: 6 3 !important; opacity: 0.6; }
-      .diff-added text { fill: #86efac !important; }
-      .diff-removed text { fill: #fca5a5 !important; }
+      .diff-added .nshape { stroke: var(--success) !important; stroke-width: 3px !important; filter: drop-shadow(0 0 4px rgba(34,197,94,0.5)); }
+      .diff-removed .nshape { stroke: var(--error) !important; stroke-width: 3px !important; stroke-dasharray: 6 3 !important; opacity: 0.6; }
+      .diff-added text { fill: var(--success-text) !important; }
+      .diff-removed text { fill: var(--error-text) !important; }
     </style></defs>`;
     svg = svg.replace(/^(<svg[^>]*>)/, '$1' + diffStyles);
     for (const nodeId of addedNodes) {
@@ -1772,8 +2068,8 @@ window.__toggleDiff = async function(cls) {
     }
     let html = svg;
     if (diff.removed_nodes?.length) {
-      const removedHtml = diff.removed_nodes.map(n => `<span style="color:#ef4444;text-decoration:line-through">${esc(n)}</span>`).join(', ');
-      html += `<div style="padding:8px 16px;font-size:11px;color:#999;border-top:1px solid #222">Removed: ${removedHtml}</div>`;
+      const removedHtml = diff.removed_nodes.map(n => `<span style="color:var(--error);text-decoration:line-through">${esc(n)}</span>`).join(', ');
+      html += `<div style="padding:8px 16px;font-size:11px;color:var(--text-dim);border-top:1px solid var(--border-subtle)">Removed: ${removedHtml}</div>`;
     }
     diagramView.innerHTML = html;
   } catch {
@@ -1860,7 +2156,7 @@ window.toggleGraphView = async function() {
   }
 
   if (!refGraph.length) {
-    canvasEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#666" font-size="14">No cross-perspective references found</text>';
+    canvasEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="' + (getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#666') + '" font-size="14">No cross-perspective references found</text>';
     return;
   }
   renderGraphView(refGraph);
@@ -1868,7 +2164,7 @@ window.toggleGraphView = async function() {
 
 function renderGraphView(refs) {
   if (!refs.length) {
-    canvasEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#666" font-size="14">No cross-perspective references found</text>';
+    canvasEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="' + (getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#666') + '" font-size="14">No cross-perspective references found</text>';
     return;
   }
 
@@ -1926,6 +2222,261 @@ function renderGraphView(refs) {
   canvasEl.innerHTML = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="overflow:visible">${svg}</svg>`;
   svgW = W; svgH = H;
   requestAnimationFrame(centerView);
+}
+
+// ── D3 Force-Directed Network Graph ─────────────────────
+let _networkMode = false;
+let _networkSimulation = null;
+
+// Open sidebar without exiting current mode (graph or network)
+function __openSbKeepMode(cls) {
+  var dataKey = resolveDataKey(cls);
+  if (!dataKey || !classesData[dataKey]) return;
+  selectedCls = cls;
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('data-nav') === cls);
+  });
+  // Auto-scroll the nav list to show the selected element
+  var activeNav = document.querySelector('.nav-item.active');
+  if (activeNav) activeNav.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  openSidebar(dataKey, cls);
+  loadFlows(cls).then(() => renderFlowBar(cls));
+}
+
+window.toggleNetworkView = function() {
+  const btn = document.getElementById('network-btn');
+  if (_networkMode) {
+    _networkMode = false;
+    if (btn) btn.classList.remove('active');
+    canvasWrap.classList.remove('network-mode');
+    if (_networkSimulation) { _networkSimulation.stop(); _networkSimulation = null; }
+    rebuildCanvas();
+    if (_savedViewport) {
+      vpX = _savedViewport.vpX;
+      vpY = _savedViewport.vpY;
+      vpScale = _savedViewport.vpScale;
+      applyTransform();
+      _savedViewport = null;
+    }
+    return;
+  }
+
+  // Exit graph mode if active
+  if (_graphMode) {
+    _graphMode = false;
+    document.getElementById('graph-btn')?.classList.remove('active');
+  }
+
+  _savedViewport = { vpX, vpY, vpScale };
+  _networkMode = true;
+  if (btn) btn.classList.add('active');
+  canvasWrap.classList.add('network-mode');
+
+  renderNetworkGraph();
+};
+
+function renderNetworkGraph() {
+  // Build node + edge data from all perspectives
+  const nodeMap = new Map(); // id -> { id, label, perspective, isChild, connections }
+  const edgeSet = new Set();
+  const edges = [];
+
+  // Color palette for perspectives
+  const palette = ['#818cf8','#f472b6','#34d399','#fbbf24','#fb923c','#a78bfa','#67e8f9','#f87171'];
+  const perspColor = {};
+  classes.forEach((c, i) => { perspColor[c] = palette[i % palette.length]; });
+
+  // Add perspective nodes
+  classes.forEach(cls => {
+    nodeMap.set(cls, { id: cls, label: fmtLabel(cls), perspective: cls, isChild: false, connections: 0 });
+  });
+
+  // Parse each perspective's diagram to find edges and child nodes
+  classes.forEach(cls => {
+    const data = classesData[cls];
+    if (!data?.diagram) return;
+    const parsed = parseFlowchart(data.diagram);
+
+    // Add child nodes
+    parsed.nodes.forEach(n => {
+      const childPath = cls + '/' + n.id;
+      if (!nodeMap.has(childPath)) {
+        nodeMap.set(childPath, { id: childPath, label: fmtLabel(n.id), perspective: cls, isChild: true, connections: 0 });
+      }
+    });
+
+    // Add edges
+    parsed.edges.forEach(e => {
+      const fromPath = cls + '/' + e.from;
+      const toPath = cls + '/' + e.to;
+      const key = fromPath + '->' + toPath;
+      if (!edgeSet.has(key)) {
+        edgeSet.add(key);
+        edges.push({ source: fromPath, target: toPath, label: e.label });
+        const fromNode = nodeMap.get(fromPath);
+        const toNode = nodeMap.get(toPath);
+        if (fromNode) fromNode.connections++;
+        if (toNode) toNode.connections++;
+      }
+    });
+
+    // Add edge from perspective to its children
+    parsed.nodes.forEach(n => {
+      const childPath = cls + '/' + n.id;
+      const key = cls + '->' + childPath;
+      if (!edgeSet.has(key) && nodeMap.has(childPath)) {
+        edgeSet.add(key);
+        edges.push({ source: cls, target: childPath, label: '' });
+        const pNode = nodeMap.get(cls);
+        const cNode = nodeMap.get(childPath);
+        if (pNode) pNode.connections++;
+        if (cNode) cNode.connections++;
+      }
+    });
+
+    // Cross-perspective edges: if a node ID matches a child of another perspective
+    parsed.nodes.forEach(n => {
+      classes.forEach(otherPersp => {
+        if (otherPersp === cls) return;
+        const otherChildren = childrenByPerspective[otherPersp] || [];
+        if (otherChildren.includes(n.id)) {
+          const fromPath = cls + '/' + n.id;
+          const toPath = otherPersp + '/' + n.id;
+          const key = fromPath + '=>' + toPath;
+          if (!edgeSet.has(key) && nodeMap.has(fromPath) && nodeMap.has(toPath)) {
+            edgeSet.add(key);
+            edges.push({ source: fromPath, target: toPath, label: 'shared' });
+          }
+        }
+      });
+    });
+  });
+
+  const nodes = Array.from(nodeMap.values());
+  if (!nodes.length) {
+    canvasEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="var(--text-muted)" font-size="14">No data for network graph</text>';
+    return;
+  }
+
+  // D3 force simulation
+  const width = canvasWrap.clientWidth;
+  const height = canvasWrap.clientHeight;
+
+  const simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(80))
+    .force('charge', d3.forceManyBody().strength(-200))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 10));
+
+  _networkSimulation = simulation;
+
+  function nodeRadius(d) {
+    if (!d.isChild) return 20; // perspective nodes
+    return Math.max(8, Math.min(16, 6 + d.connections * 2));
+  }
+
+  // Create SVG
+  const svg = d3.select(canvasEl).html('').append('svg')
+    .attr('class', 'network-svg')
+    .attr('width', width)
+    .attr('height', height)
+    .style('overflow', 'visible');
+
+  // Zoom
+  const g = svg.append('g');
+  const zoomBehavior = d3.zoom()
+    .scaleExtent([0.1, 4])
+    .filter((event) => {
+      // Allow zoom/pan only on background, not on nodes
+      if (event.target.closest('.network-node')) return false;
+      return true;
+    })
+    .on('zoom', (event) => g.attr('transform', event.transform));
+  svg.call(zoomBehavior);
+
+  // Edges
+  const link = g.append('g').selectAll('line')
+    .data(edges).join('line')
+    .attr('class', 'network-edge')
+    .attr('stroke', 'var(--svg-edge-0)')
+    .attr('stroke-width', 1.5);
+
+  // Edge labels
+  const linkLabel = g.append('g').selectAll('text')
+    .data(edges.filter(e => e.label)).join('text')
+    .attr('class', 'network-label')
+    .text(d => d.label);
+
+  // Nodes
+  const node = g.append('g').selectAll('g')
+    .data(nodes).join('g')
+    .attr('class', 'network-node')
+    .style('cursor', 'pointer');
+
+  // D3 drag for moving nodes
+  node.call(d3.drag()
+    .on('start', (event, d) => {
+      event.sourceEvent.stopPropagation();
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x; d.fy = d.y;
+    })
+    .on('drag', (event, d) => {
+      d.fx = event.x; d.fy = event.y;
+    })
+    .on('end', (event, d) => {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null; d.fy = null;
+    }));
+
+  // Click detection — use pointerdown/pointerup to track if mouse moved
+  let _clickStartX = 0, _clickStartY = 0, _isClick = false;
+  node.on('pointerdown', (event) => {
+    _clickStartX = event.clientX;
+    _clickStartY = event.clientY;
+    _isClick = true;
+  });
+  node.on('pointermove', (event) => {
+    const dx = event.clientX - _clickStartX;
+    const dy = event.clientY - _clickStartY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      _isClick = false;
+    }
+  });
+  node.on('click', (event, d) => {
+    if (!_isClick) return;
+    event.stopPropagation();
+    event.preventDefault();
+    __openSbKeepMode(d.id);
+  });
+
+  node.append('circle')
+    .attr('r', d => nodeRadius(d))
+    .attr('fill', d => perspColor[d.perspective] || '#818cf8')
+    .attr('stroke', d => d.isChild ? 'var(--border)' : 'var(--text)')
+    .attr('stroke-width', d => d.isChild ? 1.5 : 2.5)
+    .attr('fill-opacity', d => d.isChild ? 0.7 : 1);
+
+  node.append('text')
+    .attr('dy', d => nodeRadius(d) + 14)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', d => d.isChild ? '9px' : '11px')
+    .attr('fill', 'var(--text-body)')
+    .text(d => d.label);
+
+  // Tick
+  simulation.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y);
+
+    linkLabel
+      .attr('x', d => (d.source.x + d.target.x) / 2)
+      .attr('y', d => (d.source.y + d.target.y) / 2);
+
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
 }
 
 // ── export ────────────────────────────────────────────────

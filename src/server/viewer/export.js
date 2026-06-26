@@ -4,7 +4,7 @@ import { esc } from './helpers.js';
 function showExportToast(msg) {
   const t = document.createElement('div');
   t.textContent = msg;
-  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#222;color:#ccc;padding:10px 20px;border-radius:6px;font-size:13px;font-family:var(--font);z-index:99999;border:1px solid #444;';
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface2);color:var(--text-body);padding:10px 20px;border-radius:6px;font-size:13px;font-family:var(--font);z-index:99999;border:1px solid var(--border);';
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 3000);
 }
@@ -28,7 +28,11 @@ function addTitleToSvg(svg, cls) {
 
   const headerH = 44;
   const newVb = `${vx} ${vy} ${vw} ${vh + headerH}`;
-  const titleBlock = `\n    <rect x="${vx}" y="${vy}" width="${vw}" height="${headerH}" fill="#111"/>\n    <text x="${vx + 16}" y="${vy + 28}" font-family="Inter,system-ui,sans-serif" font-size="16" font-weight="600" fill="#ccc">${title}</text>\n    <line x1="${vx}" y1="${vy + headerH}" x2="${vx + vw}" y2="${vy + headerH}" stroke="#333" stroke-width="1"/>\n  `;
+  const _bg = getComputedStyle(document.documentElement).getPropertyValue('--surface2').trim() || '#111';
+  const _pageBg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#000';
+  const _text = getComputedStyle(document.documentElement).getPropertyValue('--text-body').trim() || '#ccc';
+  const _line = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#333';
+  const titleBlock = `\n    <rect x="${vx}" y="${vy}" width="${vw}" height="${vh + headerH}" fill="${_pageBg}"/>\n    <rect x="${vx}" y="${vy}" width="${vw}" height="${headerH}" fill="${_bg}"/>\n    <text x="${vx + 16}" y="${vy + 28}" font-family="Inter,system-ui,sans-serif" font-size="16" font-weight="600" fill="${_text}">${title}</text>\n    <line x1="${vx}" y1="${vy + headerH}" x2="${vx + vw}" y2="${vy + headerH}" stroke="${_line}" stroke-width="1"/>\n  `;
 
   let out = svg.replace(/viewBox="[^"]*"/, `viewBox="${newVb}"`);
   const svgOpenEnd = out.indexOf('>') + 1;
@@ -59,7 +63,8 @@ function exportElementSvg(cls, classesData, renderFlatSVG) {
   if (!svg) { showExportToast('Could not render diagram'); return; }
   svg = addTitleToSvg(svg, cls);
   const full = `<?xml version="1.0" encoding="UTF-8"?>\n${svg}`;
-  downloadSvg(full, `${cls.replace(/\//g, '_')}.svg`);
+  const proj = (typeof window.__projectName === 'string' && window.__projectName) || 'omm';
+  downloadSvg(full, `${proj}_${cls.replace(/\//g, '_')}.svg`);
 }
 
 function exportElementPng(cls, classesData, renderFlatSVG) {
@@ -88,7 +93,7 @@ function exportElementPng(cls, classesData, renderFlatSVG) {
   canvas.height = svgH * scale;
   const ctx = canvas.getContext('2d');
   ctx.scale(scale, scale);
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg').trim() || '#000';
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#000';
   ctx.fillRect(0, 0, svgW, svgH);
 
   const img = new Image();
@@ -99,7 +104,8 @@ function exportElementPng(cls, classesData, renderFlatSVG) {
     canvas.toBlob((pngBlob) => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(pngBlob);
-      a.download = `${cls.replace(/\//g, '_')}.png`;
+      const proj = (typeof window.__projectName === 'string' && window.__projectName) || 'omm';
+      a.download = `${proj}_${cls.replace(/\//g, '_')}.png`;
       a.click();
       URL.revokeObjectURL(a.href);
     }, 'image/png');
@@ -107,9 +113,29 @@ function exportElementPng(cls, classesData, renderFlatSVG) {
   };
   img.onerror = () => {
     URL.revokeObjectURL(url);
-    downloadSvg(sizedSvg, `${cls.replace(/\//g, '_')}.svg`);
+    const proj = (typeof window.__projectName === 'string' && window.__projectName) || 'omm';
+    downloadSvg(sizedSvg, `${proj}_${cls.replace(/\//g, '_')}.svg`);
   };
   img.src = url;
+}
+
+async function exportElementHtml(cls) {
+  showExportToast('Generating HTML…');
+  try {
+    const res = await fetch(`/api/class/${encodeURIComponent(cls)}/export/html`);
+    if (!res.ok) { showExportToast('Export failed'); return; }
+    const html = await res.text();
+    const project = (typeof window.__projectName === 'string' && window.__projectName) || 'omm';
+    const shortName = cls.includes('/') ? cls.split('/').pop() : cls;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${project}_${shortName}.html`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) {
+    showExportToast('Export failed: ' + e.message);
+  }
 }
 
 /** Setup export button — call after DOM is ready */
@@ -118,7 +144,20 @@ export function setupExport(getSelectedCls, classesDataRef, renderFlatSVGRef) {
     const cls = getSelectedCls();
     if (!cls) {
       const svgEl = document.querySelector('#canvas svg');
-      if (svgEl) downloadSvg(new XMLSerializer().serializeToString(svgEl), 'diagram.svg');
+      if (svgEl) {
+        let svgStr = new XMLSerializer().serializeToString(svgEl);
+        // Inject background rect after opening <svg> tag
+        const _bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#000';
+        const vbMatch = svgStr.match(/viewBox="([^"]+)"/);
+        if (vbMatch) {
+          const p = vbMatch[1].split(/\s+/);
+          if (p.length === 4) {
+            const bgRect = `<rect x="${p[0]}" y="${p[1]}" width="${p[2]}" height="${p[3]}" fill="${_bg}"/>`;
+            svgStr = svgStr.replace(/^(<svg[^>]*>)/, '$1' + bgRect);
+          }
+        }
+        downloadSvg(svgStr, 'diagram.svg');
+      }
       return;
     }
     const existing = document.getElementById('export-menu');
@@ -128,16 +167,21 @@ export function setupExport(getSelectedCls, classesDataRef, renderFlatSVGRef) {
     menu.id = 'export-menu';
     const btn = document.getElementById('export-btn');
     const rect = btn.getBoundingClientRect();
-    menu.style.cssText = `position:fixed;top:${rect.bottom + 4}px;right:${window.innerWidth - rect.right}px;background:#111;border:1px solid #333;border-radius:6px;padding:4px 0;z-index:9999;min-width:120px;`;
+    const _menuBg = getComputedStyle(document.documentElement).getPropertyValue('--surface2').trim() || '#111';
+    const _menuBorder = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#333';
+    menu.style.cssText = `position:fixed;top:${rect.bottom + 4}px;right:${window.innerWidth - rect.right}px;background:${_menuBg};border:1px solid ${_menuBorder};border-radius:6px;padding:4px 0;z-index:9999;min-width:120px;`;
     const items = [
       { label: 'SVG', action: () => exportElementSvg(cls, classesDataRef(), renderFlatSVGRef) },
       { label: 'PNG', action: () => exportElementPng(cls, classesDataRef(), renderFlatSVGRef) },
+      { label: 'HTML', action: () => exportElementHtml(cls) },
     ];
     for (const {label, action} of items) {
       const item = document.createElement('button');
       item.textContent = label;
-      item.style.cssText = 'display:block;width:100%;padding:6px 14px;background:none;border:none;color:#ccc;font-size:12px;cursor:pointer;text-align:left;font-family:var(--mono);';
-      item.onmouseover = () => item.style.background = '#1a1a1a';
+      const _itemText = getComputedStyle(document.documentElement).getPropertyValue('--text-body').trim() || '#ccc';
+      const _itemHover = getComputedStyle(document.documentElement).getPropertyValue('--surface4').trim() || '#1a1a1a';
+      item.style.cssText = `display:block;width:100%;padding:6px 14px;background:none;border:none;color:${_itemText};font-size:12px;cursor:pointer;text-align:left;font-family:var(--mono);`;
+      item.onmouseover = () => item.style.background = _itemHover;
       item.onmouseout = () => item.style.background = 'none';
       item.onclick = (e) => { e.stopPropagation(); menu.remove(); action(); };
       menu.appendChild(item);

@@ -23,8 +23,13 @@ import { commandTag } from './commands/tag.js';
 import { commandArch } from './commands/arch.js';
 import { commandShare } from './commands/share.js';
 import { commandOrg } from './commands/org.js';
+import { commandFlows } from './commands/flows.js';
+import { commandEval } from './commands/eval.js';
+import { commandRefSyntax } from './commands/ref-syntax.js';
+import { commandFeedback } from './commands/feedback.js';
+import { commandDiagramRefs } from './commands/diagram-refs.js';
 
-const GLOBAL_COMMANDS = ['init', 'setup', 'update', 'list', 'show', 'delete', 'status', 'diff', 'refs', 'validate', 'view', 'push', 'pull', 'read', 'write', 'tree', 'config', 'incremental', 'export', 'tag', 'arch', 'share', 'org', 'help'];
+const GLOBAL_COMMANDS = ['init', 'setup', 'update', 'list', 'show', 'delete', 'status', 'diff', 'refs', 'validate', 'view', 'push', 'pull', 'read', 'write', 'tree', 'config', 'incremental', 'export', 'tag', 'arch', 'share', 'org', 'flows', 'eval', 'ref-syntax', 'feedback', 'diagram-refs', 'help'];
 
 function printHelp(): void {
   const help = `
@@ -46,11 +51,18 @@ Usage:
   omm diff <path>                   Compare current vs previous diagram
   omm refs <path>                   Show elements that reference this element
   omm validate [path]               Validate diagram(s) for syntax and conventions
-  omm validate --changed [--json]   Validate only changed elements (for CI)
+  omm validate <path> --fix         Auto-fix fixable issues (writes back)
+  omm validate --explain|--rules   Document validation rules
   omm view [--port <port>]         Start web viewer (default: 3000)
   omm incremental [--json|--mark|--record]  Plan or record incremental scan updates
-  omm export <element> [--format svg|png] [-o file]  Export diagram as SVG or PNG
-  omm tag <element> [add|remove|set] [tags]         Manage element tags
+  omm export <element> [--format svg|png|html] [-o file]  Export diagram
+  omm tag <element> [add|remove|set|clear] [tags]  Manage element tags
+  omm flows <element> [add|remove] [name]          Manage flow animations
+  omm eval [--json|--explain|--suggest|--threshold <score>]  Evaluate documentation quality
+  omm show <path> --type            Show element type (perspective/leaf/group)
+  omm ref-syntax                    Document the @class-name convention
+  omm diagram-refs <path> [--json]  List @refs in a diagram with pass/fail status
+  omm feedback [--format md|json] [--include <msg>]  Generate feedback report in .omm/
 
 Architecture Repository:
   omm push [--to repo] [--commit] [--commit-push]  Push .omm/ to architecture repository
@@ -68,6 +80,22 @@ Fields: description, diagram, constraint, concern, context, todo, note
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
+
+  // omm help <cmd> — drill down to per-command help (must come before general help check)
+  if (args[0] === 'help' && args[1]) {
+    const cmd = args[1];
+    if (!GLOBAL_COMMANDS.includes(cmd)) {
+      process.stderr.write(`error: unknown command '${cmd}'. Run 'omm help' for the full list.\n`);
+      process.exit(1);
+    }
+    const { execFileSync } = await import('node:child_process');
+    try {
+      execFileSync('omm', [cmd, '--help'], { stdio: 'inherit' });
+    } catch {
+      process.stderr.write(`\nNo per-command help available for '${cmd}'. Run 'omm ${cmd} --help' directly or 'omm help' for the full list.\n`);
+    }
+    return;
+  }
 
   if (args.length === 0 || args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
     printHelp();
@@ -211,6 +239,26 @@ async function main(): Promise<void> {
 
     case 'org':
       commandOrg(args.slice(1));
+      return;
+
+    case 'flows':
+      commandFlows(args.slice(1));
+      return;
+
+    case 'eval':
+      commandEval(args.slice(1));
+      return;
+
+    case 'ref-syntax':
+      commandRefSyntax();
+      return;
+
+    case 'feedback':
+      commandFeedback(args.slice(1));
+      return;
+
+    case 'diagram-refs':
+      commandDiagramRefs(args.slice(1));
       return;
 
     default:
