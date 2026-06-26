@@ -54,6 +54,8 @@ omm view
 
 Your AI analyzes the codebase and generates **perspectives** — different lenses on your architecture (structure, data flow, integrations...). Each perspective contains a Mermaid diagram and documentation fields.
 
+`omm analyze` uses tree-sitter AST parsing to extract dependency graphs, public API surfaces, and module boundaries — giving the AI a deterministic structural anchor before semantic analysis.
+
 Every node gets **recursively analyzed**. Complex nodes become nested child elements with their own diagrams. Simple ones stay as leaves. The filesystem reflects the tree:
 
 ```
@@ -145,6 +147,17 @@ omm incremental --record <p> [full|incremental]
                                        Mark element as scanned at current commit
 ```
 
+Stale reasons:
+
+| Reason | Meaning |
+|---|---|
+| `source_file` | A tracked source file changed |
+| `source_glob` | A file matching a tracked glob changed |
+| `orphaned_source` | A tracked source file no longer exists (renamed, deleted, or refactored out) |
+| `glob_coverage_changed` | A glob now matches different files (new files added or old ones deleted) |
+| `no_source_tracking` | Element has no source_files/globs; inherits staleness from parent |
+| `source_file_mtime` | Source file modified more recently than last scan (no git baseline) |
+
 ### Architecture repository
 
 ```bash
@@ -163,6 +176,58 @@ omm feedback --format json              Write .omm/feedback.json
 omm feedback --include "msg"            Add free-form message
 omm feedback --print                    Print to stdout
 omm feedback --out <path>               Custom output path
+```
+
+### Analysis
+
+```bash
+omm analyze [dir] [--format md|json]   Structural code analysis (tree-sitter)
+omm analyze --diagram                   Auto-generate Mermaid diagram from import graph
+omm analyze --validate                  Compare .omm/ docs vs actual code structure
+omm analyze --impact <file>             Show change impact for a file
+omm analyze --extensions                Show supported file extensions
+```
+
+Supported languages: JavaScript, TypeScript, Java, Kotlin, Scala, Python, Go, Rust.
+
+`--format md` includes architecture insights:
+- **Circular dependency detection** — import cycles
+- **God nodes** — most-connected files (hubs and bridges)
+- **Communities** — auto-detected module clusters
+- **Coupling hotspots** — files with highest fan-in
+- **Dead exports** — unused public symbols
+- **Layer violation detection** — edges skipping architectural layers
+- **Architectural fitness score** — 0-100 composite score
+- **Complexity hotspots** — definitions over 50 lines
+- **Guided tour** — reading order for onboarding
+
+### Query & Search
+
+```bash
+omm query <question> [--json]           Query dependency graph (no LLM)
+omm search <query>                      Fuzzy search across elements
+omm sync [--search <query>]             Sync .omm/ to SQLite for FTS5 search
+```
+
+Query patterns: `"what connects X to Y"`, `"who imports X"`, `"cycles"`, `"hotspots"`, `"dead"`
+
+### Tour & Wiki
+
+```bash
+omm tour [dir] [--limit n]             Guided tour (read in dependency order)
+omm wiki [--out dir]                    Generate crawlable markdown wiki (default: .omm/.wiki/)
+```
+
+### Collaboration
+
+```bash
+omm hooks [install|uninstall|status]    Manage git hooks for auto-analysis
+omm watch [dir] [--debounce ms]         Auto-run omm analyze on file changes
+omm pr [number|branch] [--staged]       Show PR/module impact
+omm affected [files...] [--staged]      Find test files impacted by changes
+omm merge <source> [--out dir]          Merge another .omm/ into current
+omm mcp [--port <port>]                 Start MCP server for AI agents
+omm view [--port p] [--share]           Open viewer (--share for network access)
 ```
 
 ### Help

@@ -84,7 +84,21 @@ omm setup                          # AIツールにスキルを登録
 omm view                           # インタラクティブビューアを開く
 omm config language ja             # コンテンツ言語を設定
 omm incremental                    # git diff に基づく増分再スキャンを計画
+                                   # stale理由: source_file, source_glob, orphaned_source,
+                                   #   glob_coverage_changed, no_source_tracking
 omm update                         # 最新バージョンに更新
+omm analyze [--format md|json]     # tree-sitterによる構造解析（依存グラフ、API、モジュール）
+omm analyze --validate             # 文書化されたアーキテクチャ vs 実際のコード構造を比較
+omm analyze --impact <file>        # ファイル変更時の影響範囲を分析
+omm search <query>                 # 要素名/説明/パスのあいまい検索
+omm sync [--search <query>]        # .omm/をSQLiteに同期（FTS5検索）
+omm tour [dir] [--limit n]         # 依存順序ベースのガイドツアー
+omm wiki                           # クロール可能なマークダウンwikiを生成（デフォルト: .omm/.wiki/）
+omm affected [files...] [--staged] # 変更の影響を受けるテストファイルを検索
+omm mcp [--port <port>]            # AIエージェント用MCPサーバー起動
+omm watch [dir]                    # ファイル変更時にomm analyzeを自動実行
+omm merge <source>                 # 別の .omm/ を現在にマージ
+omm view --share                   # ネットワーク共有ビューアを開く
 ```
 
 完全なコマンドリストは`omm help`を参照してください。

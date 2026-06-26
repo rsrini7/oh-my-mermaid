@@ -33,12 +33,28 @@ Write field content (description, context, constraint, concern, todo, note) in t
 
 ## Step 1: Explore the Codebase
 
-Use Glob and Read to understand the project:
+Run the structural analyzer first to get deterministic code facts:
 
+```bash
+omm analyze --format md
+```
+
+This gives you a structured foundation:
+- **Dependency graph** — what imports what, with resolved paths
+- **Public API surface** — exported functions, classes, types
+- **Module boundaries** — directory-level cohesion scores
+- **Definitions** — all functions, classes, methods with line numbers
+- **Architecture insights** — circular deps, god nodes, communities, coupling hotspots, dead exports, fitness score, complexity hotspots, layer classification, guided tour
+
+Use the **fitness score** (0-100) to gauge architecture health. Use **circular deps** and **hotspots** to identify structural risks worth documenting as concerns.
+
+Use this as the **deterministic anchor**. Then read key files for semantic context:
 - Read `package.json`, `pyproject.toml`, or equivalent manifests
-- List top-level directories to identify module boundaries
-- Read key entry points (main, index, app files)
 - Look for route definitions, service layers, database connections, external integrations
+- Read business logic to understand constraints, concerns, and design rationale
+
+If tree-sitter is not installed (`omm analyze` shows "parser not available"), fall back to
+Glob and Read to understand the project structure manually.
 
 ## Step 1.5: Plan an incremental update (when updating an existing scan)
 
@@ -150,6 +166,16 @@ Each as a separate `omm write` command: description, context, constraint, concer
    ```
 
    Then repeat step 3c for each element in this diagram.
+
+5. **Document ALL diagram nodes — including leaf nodes.** Every node ID in a diagram should have a corresponding `.omm` element with at least a description. If a diagram contains `budget["Budget\nSessionBudgetTracker"]`, create:
+
+   ```bash
+   omm write <perspective>/budget description - <<'EOF'
+   SessionBudgetTracker — enforces token and cost limits per agent session.
+   EOF
+   ```
+
+   This ensures clicking any node in the viewer shows meaningful content, not just "this is a diagram node."
 
 ### Example recursion
 
@@ -332,12 +358,28 @@ done
 - For each parent element with undocumented children, add child descriptions
 - Target: children coverage = 100%
 
+**Iteration 8** — Document diagram-only nodes:
+- Check `omm eval` for `undocumented-diagram-node` warnings
+- For each diagram node without an `.omm` element, create a description:
+  ```bash
+  omm write <parent>/<node-id> description - <<'EOF'
+  What this component does, based on source code.
+  EOF
+  ```
+- Target: 0 undocumented diagram nodes
+
 ### Stop conditions
 
-- **Target score reached** (default 80)
+ALL of these must be met:
+- **Overall score >= 80**
+- **Field coverage >= 50%**
+- **Diagram coverage >= 50%**
+- **Flow coverage >= 30%**
+- **Ref integrity >= 20%**
+
+Plus any of these override stops:
 - **Max iterations** (default 5)
 - **No improvement** in 2 consecutive iterations
-- **All issues resolved** (no errors, no warnings)
 
 ### Usage in Claude Code
 
@@ -370,7 +412,14 @@ The user can disable auto-improvement by passing `--no-improve` to `/omm-scan`. 
 
 ## Step 6: Summarize
 
-Report what was created/updated and the final quality score from the improvement loop. Suggest `omm view` to view.
+Report what was created/updated and the final quality score from the improvement loop. Suggest:
+- `omm view` to visualize the documentation
+- `omm wiki` to generate a crawlable markdown wiki for sharing with the team
+- `omm tour --limit 20` to generate a guided reading order for onboarding
+- `omm sync` to sync to SQLite for full-text search
+- `omm watch` to auto-rebuild on file changes
+- `omm affected --staged` to find test files impacted by recent changes
+- `omm analyze --routes` to extract framework routes (Express, Django, Spring, etc.)
 
 ## Step 7: Suggest Feedback
 

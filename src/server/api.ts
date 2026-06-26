@@ -1,12 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import fs from 'node:fs';
 import * as nodePath from 'node:path';
-import { listClasses, showClass, readMeta, readField, listNodes, showNode, listProjects, getOmmDir, isArchRepo, readFlows } from '../lib/store.js';
+import { listClasses, showClass, readMeta, readField, readNodeField, listNodes, showNode, listProjects, getOmmDir, isArchRepo, readFlows } from '../lib/store.js';
 import { generateHtmlExport } from '../lib/html-export.js';
 import { diffMermaid } from '../lib/diff.js';
 import { validateDiagram } from '../lib/validate.js';
 import { getIncomingRefs, getOutgoingRefs, buildRefGraph } from '../lib/refs.js';
 import { searchOmm } from './search.js';
+import { analyzeDirectory } from '../lib/analyzer/index.js';
 
 function json(res: ServerResponse, data: unknown, status = 200): void {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -19,7 +20,7 @@ function numParam(v: string | null): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-export function handleApi(req: IncomingMessage, res: ServerResponse): boolean {
+export async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
   const path = url.pathname;
 
@@ -62,8 +63,37 @@ export function handleApi(req: IncomingMessage, res: ServerResponse): boolean {
   const refsMatch = path.match(/^\/api\/class\/([^/]+)\/refs$/);
   if (refsMatch) {
     const className = refsMatch[1];
-    const incoming = getIncomingRefs(className);
-    const outgoing = getOutgoingRefs(className);
+    const nodeParam = url.searchParams.get('node');
+    let incoming = getIncomingRefs(className);
+    let outgoing = getOutgoingRefs(className);
+
+    // For nested elements, also extract refs from parent diagram edges
+    if (nodeParam && nodeParam.includes('/')) {
+      const parts = nodeParam.split('/');
+      const perspective = parts[0];
+      const nodeId = parts[parts.length - 1];
+      const parentPath = parts.slice(0, -1).join('/');
+      const parentDiagram = parentPath === perspective
+        ? readField(perspective, 'diagram')
+        : readNodeField(perspective, parentPath.split('/').slice(1), 'diagram');
+
+      if (parentDiagram) {
+        // Find edges where this node is source or target
+        const edgePattern = new RegExp(`(\\S+)\\s*-->.*?(\\S+)`, 'g');
+        let match;
+        while ((match = edgePattern.exec(parentDiagram)) !== null) {
+          const from = match[1].replace(/["'\[\](){}]/g, '').split('\\n')[0].trim();
+          const to = match[2].replace(/["'\[\](){}]/g, '').split('\\n')[0].trim();
+          if (from === nodeId && !outgoing.some(r => r.target_class === to)) {
+            outgoing.push({ source_class: nodeParam, target_class: to, node_id: nodeId });
+          }
+          if (to === nodeId && !incoming.some(r => r.source_class === from)) {
+            incoming.push({ source_class: from, target_class: nodeParam, node_id: nodeId });
+          }
+        }
+      }
+    }
+
     json(res, { incoming, outgoing });
     return true;
   }
@@ -114,6 +144,24 @@ export function handleApi(req: IncomingMessage, res: ServerResponse): boolean {
   // GET /api/refs/graph
   if (path === '/api/refs/graph') {
     json(res, buildRefGraph());
+    return true;
+  }
+
+  // GET /api/stats — language statistics and codebase health
+  if (path === '/api/stats') {
+    const ommDir = getOmmDir();
+    const cwd = ommDir ? nodePath.dirname(ommDir) : process.cwd();
+    try {
+      const analysis = await analyzeDirectory(cwd);
+      json(res, {
+        languageStats: analysis.stats.languageStats,
+        totalFiles: analysis.stats.totalFiles,
+        analyzedFiles: analysis.stats.analyzedFiles,
+        errorFiles: analysis.stats.errorFiles,
+      });
+    } catch (err: any) {
+      json(res, { error: err.message });
+    }
     return true;
   }
 

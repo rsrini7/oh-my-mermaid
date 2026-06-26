@@ -41,6 +41,30 @@ Write field content (description, context, constraint, concern, todo, note) in t
 When iterating, these commands help diagnose specific issues:
 
 ```bash
+# Get deterministic code structure + architecture insights (fitness score, cycles, hotspots, god nodes, communities)
+omm analyze --format md
+
+# Check if documented architecture matches actual code
+omm analyze --validate
+
+# Show change impact for a specific file
+omm analyze --impact <file>
+
+# Extract framework routes
+omm analyze --routes
+
+# Search across all elements (fuzzy)
+omm search <query>
+
+# Full-text search via SQLite
+omm sync --search <query>
+
+# Guided tour (read in dependency order)
+omm tour --limit 20
+
+# Find test files impacted by changes
+omm affected --staged
+
 # Show element type (perspective/leaf/group) and why
 omm show <element> --type
 
@@ -115,7 +139,7 @@ Use `omm eval --explain <element>` to see which components are missing for a spe
 ### Issue types (from `issues` array)
 
 The eval report includes an `issues` array. Each issue has:
-- `type` — one of: `missing-description`, `invalid-diagram`, `incomplete-children`, `sparse-fields`, `no-flows`, `corrupted-tags`
+- `type` — one of: `missing-description`, `invalid-diagram`, `incomplete-children`, `sparse-fields`, `no-flows`, `corrupted-tags`, `undocumented-diagram-node`
 - `severity` — `error` | `warning` | `info`
 - `message` — human-readable description with fix suggestion
 - `path` — element path
@@ -124,6 +148,20 @@ When the loop runs, address issues in priority order:
 1. **errors** — must fix
 2. **warnings** — should fix
 3. **info** — nice to fix
+
+### `undocumented-diagram-node` detection
+
+When a diagram contains a node (e.g., `budget["Budget\nSessionBudgetTracker"]`) but no corresponding `.omm` child element exists, the eval reports it as a warning. These nodes are invisible in the viewer — clicking them shows "this is a diagram node" with no content.
+
+To fix:
+```bash
+# Create a description for the undocumented node
+omm write <parent>/<node-id> description - <<'EOF'
+What this component does, based on the code it represents.
+EOF
+```
+
+The `summary.undocumentedDiagramNodes` count in the JSON report tracks how many diagram nodes lack `.omm` elements. The eval summary line shows: `Diagram gaps: N node(s) without .omm element`.
 
 ### `corrupted-tags` detection
 
@@ -232,7 +270,24 @@ The user can pass arguments to control the loop:
 - `--max-iterations <n>` — max iterations (default: 5)
 - `--target <score>` — target score to reach (default: 80)
 
-Default behavior: stop when score >= 80 OR no improvement in 2 iterations.
+## Stop Conditions
+
+The loop stops when ALL of these are met:
+- Overall score >= target (default 80)
+- **Field coverage >= 50%** (at least 4 of 7 fields filled on average)
+- **Diagram coverage >= 50%** (at least half of elements have diagrams)
+- **Flow coverage >= 30%** (at least 30% of elements have flows)
+- **Ref integrity >= 20%** (at least 20% of elements have cross-references)
+
+If the overall score reaches 80 but any per-component minimum is not met, **continue iterating** targeting the weakest component. The overall score alone is not sufficient — all gates must pass.
+
+### Why per-component gates?
+
+An overall score of 80 can hide critical gaps:
+- Fields 100% + Diagram 100% + Description 100% = 70 points (70%)
+- Add Children 100% = 80 points — but Flows 0% and Refs 0%
+
+This means the documentation is structurally complete but has no flow definitions or cross-references — making it less useful for navigation and understanding. The per-component gates ensure minimum coverage across all dimensions.
 
 ## Example Session
 

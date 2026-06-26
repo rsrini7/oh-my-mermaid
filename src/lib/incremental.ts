@@ -3,6 +3,7 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 import YAML from 'yaml';
 import type { ClassMeta } from '../types.js';
+import type { FingerprintDelta } from './analyzer/types.js';
 import { getOmmDir } from './store.js';
 
 const META_FILE = 'meta.yaml';
@@ -23,7 +24,7 @@ export interface ElementInfo {
   elementDir: string;
 }
 
-export type StaleReason = 'source_file' | 'source_glob' | 'no_source_tracking' | 'source_file_mtime' | 'uncommitted';
+export type StaleReason = 'source_file' | 'source_glob' | 'no_source_tracking' | 'source_file_mtime' | 'uncommitted' | 'orphaned_source' | 'glob_coverage_changed';
 
 export interface StaleElement {
   elementPath: string;
@@ -345,6 +346,23 @@ export function planIncrementalUpdate(ommDir: string, cwd: string = process.cwd(
       continue;
     }
 
+    // ── Check 1: Orphaned source_files ──────────────────────
+    // If a tracked source_file no longer exists on disk, the element is stale.
+    // This catches renames, deletions, and refactors that moved code elsewhere.
+    const orphaned: string[] = [];
+    for (const sf of sourceFiles) {
+      const abs = path.isAbsolute(sf) ? sf : path.join(cwd, sf);
+      if (!fs.existsSync(abs)) {
+        orphaned.push(sf);
+      }
+    }
+    if (orphaned.length > 0) {
+      const s = ensureStale(el);
+      s.matchedFiles.push(...orphaned);
+      s.reasons.push('orphaned_source');
+      // Don't continue — also check for other changes below
+    }
+
     const matched: string[] = [];
     const reasons = new Set<StaleReason>();
     for (const change of allChanges) {
@@ -356,12 +374,34 @@ export function planIncrementalUpdate(ommDir: string, cwd: string = process.cwd(
         reasons.add('source_glob');
       }
     }
+    for (const r of reasons) orphaned.push(...[]); // merge reasons
 
     if (matched.length > 0) {
       const s = ensureStale(el);
-      s.matchedFiles.push(...matched);
+      s.matchedFiles.push(...matched.filter(f => !s.matchedFiles.includes(f)));
       for (const r of reasons) s.reasons.push(r);
       continue;
+    }
+    if (orphaned.length > 0) {
+      // Already marked stale from orphan check above
+      continue;
+    }
+
+    // ── Check 2: Glob coverage change ───────────────────────
+    // If globs are tracked, check if the set of matching files has changed
+    // since the last scan_generation. This catches new files added to a glob
+    // (e.g., new module in src/lib/*.ts) that the element should know about.
+    if (sourceGlobs.length > 0 && meta.scan_generation?.git_commit) {
+      // Get files that changed near the element's source surface
+      const globChanges = allChanges.filter(c => fileMatchesAnyGlob(c.path, sourceGlobs));
+      // Any added or deleted files matching the glob indicate surface change
+      const surfaceChanges = globChanges.filter(c => c.status === 'added' || c.status === 'deleted');
+      if (surfaceChanges.length > 0) {
+        const s = ensureStale(el);
+        s.matchedFiles.push(...surfaceChanges.map(c => c.path));
+        s.reasons.push('glob_coverage_changed');
+        continue;
+      }
     }
 
     // mtime fallback — only meaningful when we have no git baseline (noGit or no
@@ -381,6 +421,28 @@ export function planIncrementalUpdate(ommDir: string, cwd: string = process.cwd(
     }
 
     fresh.push(el.elementPath);
+  }
+
+  // ── Propagate staleness: parent stale → children with no tracking ──
+  // Children that have no source_files/globs inherit staleness from their
+  // nearest ancestor that does. This catches nested elements whose parent
+  // perspective is stale but the child has no independent tracking.
+  const staleSet = new Set(staleMap.keys());
+  for (const el of elements) {
+    if (staleSet.has(el.elementPath)) continue;
+    if (fresh.includes(el.elementPath)) continue;
+    // Walk up the path to find a stale ancestor
+    const parts = el.elementPath.split('/');
+    for (let i = parts.length - 1; i > 0; i--) {
+      const ancestor = parts.slice(0, i).join('/');
+      if (staleSet.has(ancestor)) {
+        const s = ensureStale(el);
+        s.reasons.push('no_source_tracking');
+        s.matchedFiles.push(`(inherited from ${ancestor})`);
+        staleSet.add(el.elementPath);
+        break;
+      }
+    }
   }
 
   // Unknown bucket: elements with no source tracking and no triggers.
@@ -471,4 +533,65 @@ export function recordScanGeneration(
   meta.scan_generation = { mode, git_commit: commit, at: new Date().toISOString() };
   meta.updated = new Date().toISOString();
   writeMetaFile(metaPath, meta);
+}
+
+// ---------- AST Fingerprint integration ----------
+
+const FINGERPRINT_CACHE_FILE = '.fingerprint-cache.json';
+
+/**
+ * Get the path to the fingerprint cache file inside .omm/.
+ */
+export function getFingerprintCachePath(ommDir: string = getOmmDir()): string {
+  return path.join(ommDir, FINGERPRINT_CACHE_FILE);
+}
+
+/**
+ * Map fingerprint deltas to stale elements. More precise than file-level matching.
+ * A delta with added/removed definitions triggers re-analysis of the element
+ * that owns that file.
+ */
+export function mapFingerprintsToElements(
+  deltas: FingerprintDelta[],
+  ommDir: string = getOmmDir(),
+): StaleElement[] {
+  const elements = loadElementIndex(ommDir);
+  const staleMap = new Map<string, StaleElement>();
+
+  for (const delta of deltas) {
+    if (!delta.hasChanges) continue;
+
+    for (const el of elements) {
+      const sourceFiles = el.meta.source_files ?? [];
+      const sourceGlobs = el.meta.source_globs ?? [];
+
+      const matchesFile = sourceFiles.some(sf => fileMatchesPath(delta.file, sf));
+      const matchesGlob = fileMatchesAnyGlob(delta.file, sourceGlobs);
+
+      if (matchesFile || matchesGlob) {
+        let s = staleMap.get(el.elementPath);
+        if (!s) {
+          s = { elementPath: el.elementPath, matchedFiles: [], reasons: [] };
+          staleMap.set(el.elementPath, s);
+        }
+        s.matchedFiles.push(delta.file);
+        s.reasons.push('source_file');
+      }
+    }
+  }
+
+  return [...staleMap.values()].sort((a, b) => a.elementPath.localeCompare(b.elementPath));
+}
+
+/**
+ * Format a fingerprint delta summary for display.
+ */
+export function formatFingerprintDelta(delta: FingerprintDelta): string {
+  if (!delta.hasChanges) return `${delta.file}: no structural changes`;
+
+  const parts: string[] = [];
+  if (delta.added.length > 0) parts.push(`+${delta.added.length} added`);
+  if (delta.removed.length > 0) parts.push(`-${delta.removed.length} removed`);
+  if (delta.modified.length > 0) parts.push(`~${delta.modified.length} modified`);
+  return `${delta.file}: ${parts.join(', ')}`;
 }

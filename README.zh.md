@@ -84,7 +84,21 @@ omm setup                          # 向 AI 工具注册技能
 omm view                           # 打开交互式查看器
 omm config language zh             # 设置内容语言
 omm incremental                    # 基于 git diff 规划增量重新扫描
+                                   # stale 原因: source_file, source_glob, orphaned_source,
+                                   #   glob_coverage_changed, no_source_tracking
 omm update                         # 更新到最新版本
+omm analyze [--format md|json]     # 基于 tree-sitter 的结构分析（依赖图、API、模块）
+omm analyze --validate             # 比较文档化的架构 vs 实际代码结构
+omm analyze --impact <file>        # 分析文件变更的影响范围
+omm search <query>                 # 模糊搜索元素名称/描述/路径
+omm sync [--search <query>]        # 将 .omm/ 同步到 SQLite（FTS5 搜索）
+omm tour [dir] [--limit n]         # 按依赖顺序的引导式导览
+omm wiki                           # 生成可爬取的 Markdown wiki（默认: .omm/.wiki/）
+omm affected [files...] [--staged] # 查找受变更影响的测试文件
+omm mcp [--port <port>]            # 启动 AI 代理的 MCP 服务器
+omm watch [dir]                    # 文件变更时自动运行 omm analyze
+omm merge <source>                 # 将另一个 .omm/ 合并到当前
+omm view --share                   # 打开网络共享查看器
 ```
 
 完整命令列表请运行 `omm help`。

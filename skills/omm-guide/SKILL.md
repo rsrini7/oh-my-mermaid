@@ -36,13 +36,14 @@ Run `omm list`. If it shows "Architecture repository (N projects)":
 
 ## Step 1: Pick a starting point
 
-1. If user passed `[topic]`, choose the most relevant perspective/class by scanning these fields (in order):
+1. Run `omm tour --limit 10` to get a dependency-ordered reading list. Use this as the starting point for onboarding.
+2. If user passed `[topic]`, choose the most relevant perspective/class by scanning these fields (in order):
    - description
    - context
    - constraint
    - todo
-2. If no topic, start from `overall-architecture` if it exists.
-3. If `overall-architecture` doesn't exist, pick the first perspective returned by `omm list`.
+3. If no topic, start from `overall-architecture` if it exists.
+4. If `overall-architecture` doesn't exist, pick the first perspective returned by `omm list`.
 
 ---
 
@@ -52,6 +53,13 @@ Show:
 - how to navigate in the viewer (`omm view`) — main canvas, Rich tab, D3 network (⬡), relationship graph (◈), search, theme toggle
 - that each perspective/element has fields: description, diagram, context, constraint, concern, todo, note
 - how to interpret `@class-name` references (use `omm ref-syntax` to see the convention)
+- how to verify docs match reality: `omm analyze --validate` compares documented edges against actual import dependencies
+- the architectural fitness score from `omm analyze --format md` — a 0-100 score covering circular deps, cohesion, coupling, layer purity, and doc accuracy
+- the guided tour: `omm tour --limit 20` — read files in dependency order to understand the codebase
+- fuzzy search: `omm search <query>` — find elements by name, description, or path
+- full-text search: `omm sync --search <query>` — SQLite FTS5 search (requires `better-sqlite3`)
+- framework routes: `omm analyze --routes` — see Express/Django/Spring/etc. routing
+- affected tests: `omm affected --staged` — find test files impacted by recent changes
 
 ---
 
@@ -66,6 +74,7 @@ For the current selected element `<E>`:
    - `omm refs <E>` to see incoming references
    - `omm refs --reverse <E>` to see outgoing references
    - `omm diagram-refs <E>` to see resolved @refs and pass/fail
+   - `omm search <E>` to find related elements
 2. Present:
    - Description (short)
    - Context (why/decisions)

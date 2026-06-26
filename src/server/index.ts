@@ -51,13 +51,31 @@ function detectArchRepo(): { isArch: boolean; projects: string[]; ommDir: string
   return { isArch: isArchRepo(), projects: listProjects(), ommDir };
 }
 
-export function startServer(port: number): void {
+export function startServer(port: number, host: string = '127.0.0.1'): void {
   startWatcher();
+
+  // Connect-time catch-up: check when last analysis ran
+  const ommDir = getOmmDir();
+  if (ommDir) {
+    const logPath = path.join(ommDir, 'analyze.log');
+    if (fs.existsSync(logPath)) {
+      const log = fs.readFileSync(logPath, 'utf-8').trim();
+      const lastLine = log.split('\n').pop();
+      if (lastLine) {
+        const ts = lastLine.split('  ')[0];
+        const age = Date.now() - new Date(ts).getTime();
+        const mins = Math.round(age / 60000);
+        if (mins > 60) {
+          process.stderr.write(`  Last analysis: ${Math.round(mins / 60)}h ago — consider running \`omm analyze\` for fresh data\n`);
+        }
+      }
+    }
+  }
 
   // Detect once at startup — no per-request global mutation
   const archInfo = detectArchRepo();
 
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
     const projectParam = url.searchParams.get('project');
 
@@ -77,7 +95,7 @@ export function startServer(port: number): void {
 
     // API endpoints — pass project context via query param, no global state
     if (url.pathname.startsWith('/api/')) {
-      if (handleApi(req, res)) return;
+      if (await handleApi(req, res)) return;
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'not found' }));
       return;
@@ -129,8 +147,12 @@ export function startServer(port: number): void {
     }
   });
 
-  server.listen(port, () => {
-    process.stderr.write(`oh-my-mermaid viewer running at http://localhost:${port}\n`);
+  server.listen(port, host, () => {
+    const displayHost = host === '0.0.0.0' ? 'your-ip' : 'localhost';
+    process.stderr.write(`oh-my-mermaid viewer running at http://${displayHost}:${port}\n`);
+    if (host === '0.0.0.0') {
+      process.stderr.write(`  Shared on network — others can connect using your IP\n`);
+    }
     if (archInfo.isArch) {
       process.stderr.write(`  Arch repo: ${archInfo.ommDir} (${archInfo.projects.length} projects)\n`);
     }

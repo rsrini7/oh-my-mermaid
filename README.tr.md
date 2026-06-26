@@ -84,7 +84,21 @@ omm setup                          # Yetenekleri AI araçlarına kaydet
 omm view                           # Etkileşimli görüntüleyiciyi aç
 omm config language ko             # İçerik dilini ayarla
 omm incremental                    # git diff'e dayalı kademeli yeniden tarama planla
+                                   # stale nedenleri: source_file, source_glob, orphaned_source,
+                                   #   glob_coverage_changed, no_source_tracking
 omm update                         # En güncel sürüme geç
+omm analyze [--format md|json]     # tree-sitter ile yapısal analiz (bağımlılık grafiği, API, modüller)
+omm analyze --validate             # Belgelenen mimari vs gerçek kod yapısını karşılaştır
+omm analyze --impact <file>        # Dosya değişikliğinin etki alanını analiz et
+omm search <query>                 # Öğre ad/açıklama/yol bulanık araması
+omm sync [--search <query>]        # .omm/’ü SQLite’a senkronize et (FTS5 arama)
+omm tour [dir] [--limit n]         # Bağımlılık sırasına göre rehberli tur
+omm wiki                       # Taranabilir markdown wiki oluştur (varsayılan: .omm/.wiki/)
+omm affected [files...] [--staged] # Değişikliklerden etkilenen test dosyalarını bul
+omm mcp [--port <port>]            # AI ajanları için MCP sunucusu başlat
+omm watch [dir]                    # Dosya değişikliklerinde omm analyze otomatik çalıştır
+omm merge <source>                 # Başka bir .omm/’ü mevcut olana birleştir
+omm view --share                   # Ağ paylaşımı görüntüleyici aç
 ```
 
 Tüm komutları görmek için `omm help` çalıştırın.
