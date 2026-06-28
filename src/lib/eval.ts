@@ -5,6 +5,8 @@ import { listClasses, listNodes, readField, readNodeField, readMeta, readNodeMet
 import { getIncomingRefs, getOutgoingRefs } from './refs.js';
 import { validateDiagram } from './validate.js';
 import { parseMermaid } from './diff.js';
+import { checkSignature } from './signature.js';
+import { buildReconcileReport } from './reconcile.js';
 
 export interface ScoreBreakdown {
   fields: { earned: number; max: number; present: number; total: number };
@@ -283,7 +285,56 @@ export function evaluateProject(cwd?: string): EvalReport {
   }
 
   if (undocumentedDiagramNodes.length > 0) {
-    suggestions.push(`${undocumentedDiagramNodes.length} diagram node(s) lack documentation. Run /omm-scan and ask: "create descriptions for undocumented diagram nodes"`);
+    suggestions.push(`${undocumentedDiagramNodes.length} diagram node(s) lack documentation. Run /omm-scan with --max-iterations 10 to ensure all diagram nodes are documented`);
+  }
+
+  // Check structural signature
+  let signatureStale = false;
+  try {
+    const ommDir = getOmmDir(cwd);
+    const sig = checkSignature(ommDir);
+    signatureStale = !sig.match && sig.stored !== null; // Only report stale if there's a stored signature
+    if (signatureStale) {
+      issues.push({
+        type: 'stale-signature',
+        severity: 'info',
+        message: `Structural signature is stale (stored: ${sig.stored}, current: ${sig.current}). Run 'omm signature --update' after scanning.`,
+        path: undefined,
+      });
+    }
+  } catch {
+    // signature check failed, skip
+  }
+
+  // Check reconciliation issues
+  try {
+    const ommDir = getOmmDir(cwd);
+    const reconcileReport = buildReconcileReport(ommDir, cwd);
+    if (reconcileReport.orphanedSources.length > 0) {
+      issues.push({
+        type: 'orphaned-sources',
+        severity: 'warning',
+        message: `${reconcileReport.orphanedSources.length} source file(s) referenced in meta.yaml no longer exist. Run 'omm reconcile --fix' to clean up.`,
+        path: undefined,
+      });
+    }
+    if (reconcileReport.brokenRefs.length > 0) {
+      issues.push({
+        type: 'broken-refs',
+        severity: 'warning',
+        message: `${reconcileReport.brokenRefs.length} broken @ref(s) found in diagrams. Run 'omm reconcile' for details.`,
+        path: undefined,
+      });
+    }
+  } catch {
+    // reconciliation check failed, skip
+  }
+
+  // Add suggestions for new commands
+  suggestions.push('Use `omm treecode --stats` to check code ↔ docs coverage');
+  suggestions.push('Use `omm inspect <element>` for detailed element inspection');
+  if (signatureStale) {
+    suggestions.push('Run `omm signature --update` to store the current structural signature');
   }
 
   // Summary

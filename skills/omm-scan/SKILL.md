@@ -306,7 +306,7 @@ omm eval --suggest
 
 # 2. Loop until target or max iterations
 TARGET=80
-MAX_ITER=5
+MAX_ITER=10
 for i in $(seq 1 $MAX_ITER); do
   if [ "$SCORE" -ge "$TARGET" ]; then
     echo "✓ Target reached in iteration $((i-1))"
@@ -397,7 +397,7 @@ ALL of these must be met:
 - **Ref integrity >= 20%**
 
 Plus any of these override stops:
-- **Max iterations** (default 5)
+- **Max iterations** (default 10)
 - **No improvement** in 2 consecutive iterations
 
 ### Usage in Claude Code
@@ -429,9 +429,35 @@ Initial score: 31
 
 The user can disable auto-improvement by passing `--no-improve` to `/omm-scan`. The scan will then only generate initial docs and stop.
 
-## Step 6: Summarize
+## Step 6: Post-Scan Verification
 
-Report what was created/updated and the final quality score from the improvement loop. Suggest:
+After the improvement loop completes, run these verification commands:
+
+```bash
+# Check code ↔ docs coverage
+tredestats=$(omm treecode --stats)
+echo "$treestats"
+
+# Update structural signature
+omm signature --update
+
+# Run reconciliation to check for remaining issues
+omm reconcile
+```
+
+If `omm reconcile` reports orphaned source files, fix them:
+```bash
+omm reconcile --fix
+```
+
+## Step 7: Summarize
+
+Report what was created/updated and the final quality score from the improvement loop. Include:
+- Initial score → final score
+- Coverage stats from `omm treecode --stats`
+- Any remaining reconciliation issues
+
+Suggest:
 - `omm view` to visualize the documentation
 - `omm wiki` to generate a crawlable markdown wiki for sharing with the team
 - `omm tour --limit 20` to generate a guided reading order for onboarding
@@ -439,11 +465,10 @@ Report what was created/updated and the final quality score from the improvement
 - `omm watch` to auto-rebuild on file changes
 - `omm affected --staged` to find test files impacted by recent changes
 - `omm analyze --routes` to extract framework routes (Express, Django, Spring, etc.)
-- `omm treecode --stats` to check code ↔ docs coverage
-- `omm signature --update` to store the structural signature
 - `omm links <element> --add <url>` to add external documentation links
+- `omm hooks install --all` to install git hooks for auto-analysis and signature checks
 
-## Step 7: Suggest Feedback
+## Step 8: Suggest Feedback
 
 If during the scan or auto-improve loop you encountered:
 - Unclear eval output or scoring that doesn't match expectations

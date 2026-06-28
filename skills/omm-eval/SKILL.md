@@ -133,6 +133,28 @@ Parse the report to understand:
 - `issues` — specific issues to fix
 - `suggestions` — improvement recommendations
 
+### Additional diagnostics with new commands
+
+```bash
+# Check code ↔ docs coverage
+omm treecode --stats
+
+# Check for structural drift
+omm signature --check
+
+# Full reconciliation report
+omm reconcile
+
+# Detailed inspection of worst-scoring element
+omm inspect <worst-element>
+
+# Check link resolution for an element
+omm inspect <element> --links
+
+# Show external links for an element
+omm links <element>
+```
+
 ### Score breakdown (from `scoreBreakdown` in JSON)
 
 The overall score is the sum of 6 components:
@@ -261,25 +283,47 @@ omm tag <element> add tag1,tag2
 
 Stop the loop when:
 - **Target score reached**: `score >= 80` (configurable)
-- **Max iterations**: default 5 iterations
+- **Max iterations**: default 10 iterations
 - **No improvement**: score didn't change in last 2 iterations
 - **All critical issues resolved**: no more errors/warnings
 
-## Step 5: Final Report
+## Step 5: Post-Evaluation Verification
 
-After the loop completes, report:
+After the loop completes, run these verification commands:
+
+```bash
+# Check code ↔ docs coverage
+omm treecode --stats
+
+# Update structural signature
+omm signature --update
+
+# Run reconciliation
+omm reconcile
+```
+
+If `omm reconcile` reports issues, fix them:
+```bash
+omm reconcile --fix
+```
+
+## Step 6: Final Report
+
+Report:
 
 - **Initial score** (from Step 2)
 - **Final score** (from last iteration)
 - **Improvement delta** (final - initial)
 - **Issues resolved** (count of fixed issues)
 - **Issues remaining** (count and types)
+- **Code coverage** (from `omm treecode --stats`)
+- **Reconciliation status** (from `omm reconcile`)
 
 ## Loop Configuration
 
 The user can pass arguments to control the loop:
 
-- `--max-iterations <n>` — max iterations (default: 5)
+- `--max-iterations <n>` — max iterations (default: 10)
 - `--target <score>` — target score to reach (default: 80)
 
 ## Stop Conditions
@@ -335,8 +379,12 @@ Issues: 0 errors, 0 warnings, 12 info
 - **Keep iterations focused** — fix a few elements per iteration, not all at once
 - **Re-evaluate after each batch of changes** before deciding the next batch
 - **Write in the configured language** (check `omm config language` first)
+- **Use `omm treecode --stats`** to check code ↔ docs coverage
+- **Use `omm inspect <element>`** for detailed element inspection
+- **Use `omm reconcile`** to check for orphaned sources and broken refs
+- **Run `omm signature --update`** after completing all improvements
 
-## Step 6: Suggest Feedback
+## Step 7: Suggest Feedback
 
 At the end of the iteration, if the user encountered:
 - Confusing eval output or scoring that doesn't match expectations
