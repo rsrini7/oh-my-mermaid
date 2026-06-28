@@ -9,7 +9,7 @@
 <h1 align="center">OmniMap</h1>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/omnimap"><img src="https://img.shields.io/npm/v/omnimap" alt="npm version"/></a>
+  <a href="https://www.npmjs.com/package/@rsrini/omnimap"><img src="https://img.shields.io/npm/v/@rsrini/omnimap" alt="npm version"/></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"/></a>
 </p>
 
@@ -163,7 +163,7 @@ omm login && omm link && omm push
 ## 개발 & 기여
 
 ```bash
-git clone https://github.com/omnimap/omnimap.git
+git clone https://github.com/@rsrini/omnimap.git
 cd omnimap
 npm install && npm run build
 npm test

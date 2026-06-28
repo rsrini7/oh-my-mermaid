@@ -7,7 +7,7 @@
 <h1 align="center">OmniMap</h1>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/omnimap"><img src="https://img.shields.io/npm/v/omnimap" alt="npm version"/></a>
+  <a href="https://www.npmjs.com/package/@rsrini/omnimap"><img src="https://img.shields.io/npm/v/@rsrini/omnimap" alt="npm version"/></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"/></a>
 </p>
 
@@ -618,7 +618,7 @@ Issues and PRs welcome. Use [Conventional Commits](https://www.conventionalcommi
 
 ## Acknowledgments
 
-This project was originally forked from [omnimap/omnimap](https://github.com/omnimap/omnimap). We thank the original authors for their foundational work.
+This project was originally forked from [oh-my-mermaid/oh-my-mermaid](https://github.com/oh-my-mermaid/oh-my-mermaid). We thank the original authors for their foundational work.
 
 OmniMap has since evolved into an independent project with:
 - Multi-format diagram support (Mermaid, D3, PlantUML, and more)

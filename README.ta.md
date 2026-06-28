@@ -616,7 +616,7 @@ npm test
 
 ## நன்றி
 
-இந்த திட்டம் முதலில் [omnimap/omnimap](https://github.com/omnimap/omnimap) இலிருந்து ஃபோர்க் செய்யப்பட்டது. அவர்களின் அடிப்படை வேலைக்கு நன்றி.
+இந்த திட்டம் முதலில் [oh-my-mermaid/oh-my-mermaid](https://github.com/oh-my-mermaid/oh-my-mermaid) இலிருந்து ஃபோர்க் செய்யப்பட்டது. அவர்களின் அடிப்படை வேலைக்கு நன்றி.
 
 OmniMap பின்வரும் மேம்பாடுகளுடன் ஒரு சுயாதீன திட்டமாக உருவாகியுள்ளது:
 - பல-வடிவ வரைபட ஆதரவு (Mermaid, D3, PlantUML, மேலும்)
