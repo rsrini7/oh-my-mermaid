@@ -74,6 +74,12 @@ omm validate --explain      # full rule docs (rule + fix + example)
 omm validate --rules        # one-liner rule list
 omm validate <element> --fix  # auto-fix fixable issues (classdef-color), writes back
 
+# Diagram format support
+# omm eval and omm validate detect format automatically:
+#   .puml files → PlantUML validation (@startuml/@enduml, participants, arrows)
+#   .mmd files  → Mermaid validation (graph declaration, nodes, edges)
+# Set format explicitly: omm format <element> set plantuml
+
 # Check for circular cross-references between perspectives
 # Look for 'perspective-cross-ref' warnings in the output
 omm validate 2>&1 | grep -i "perspective-cross-ref\|circular"
