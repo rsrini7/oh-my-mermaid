@@ -21,10 +21,10 @@ This creates an **iterative improvement loop** that progressively raises documen
 ## Prerequisites
 
 ```bash
-command -v omm || npm install -g omnimap
+command -v omm || npm install -g @rsrini/omnimap
 ```
 
-If the install fails, tell the user: "Please run `npm install -g omnimap` in your terminal, then try again."
+If the install fails, tell the user: "Please run `npm install -g @rsrini/omnimap` in your terminal, then try again."
 
 ---
 
@@ -166,7 +166,7 @@ The overall score is the sum of 6 components:
 | Component | Max | When earned |
 |-----------|-----|-------------|
 | `fields` | 40 | proportional to fields filled (7 total) |
-| `diagram` | 20 | 20 if valid mermaid, 10 if has but invalid |
+| `diagram` | 20 | 20 if valid (Mermaid or PlantUML), 10 if has but invalid |
 | `description` | 10 | 10 if >50 chars, 5 if >20 chars |
 | `flows` | 10 | 10 if any flow definitions exist |
 | `refs` | 10 | 10 if any @cross-references in diagram |

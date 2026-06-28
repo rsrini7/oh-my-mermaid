@@ -390,6 +390,58 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
 }
 
 // ── mermaid syntax highlighting ────────────────────────────
+/** Render PlantUML via API proxy */
+async function renderPlantUMLDiagram(source) {
+  try {
+    const res = await fetch("/api/render/plantuml", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source }),
+    });
+    if (res.ok) {
+      return await res.text();
+    }
+    console.error("PlantUML render failed:", res.status);
+    return fallbackPlantUMLSvg(source);
+  } catch (err) {
+    console.error("PlantUML render error:", err);
+    return fallbackPlantUMLSvg(source);
+  }
+}
+
+/** Fallback SVG for PlantUML when renderer unavailable */
+function fallbackPlantUMLSvg(text) {
+  const lines = text.split("\n");
+  const width = 600;
+  const lineHeight = 18;
+  const height = Math.max(100, lines.length * lineHeight + 60);
+  const escH = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  
+  const textLines = lines.map((line, i) => {
+    return `<text x="20" y="${40 + i * lineHeight}" font-family="monospace" font-size="13" fill="#cdd6f4">${escH(line)}</text>`;
+  }).join("\n");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect width="${width}" height="${height}" fill="#1e1e2e" rx="8"/>
+    <text x="20" y="20" font-family="sans-serif" font-size="11" fill="#6c7086">PlantUML (offline preview)</text>
+    ${textLines}
+  </svg>`;
+}
+
+/** Basic PlantUML syntax highlighting */
+function highlightPlantUML(text) {
+  if (!text) return "";
+  const escH = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return text.split("\n").map(line => {
+    if (/^\s'/.test(line)) return `<span class="mk-comment">${escH(line)}</span>`;
+    if (/^@startuml|^@enduml/i.test(line)) return `<span class="mk-keyword">${escH(line)}</span>`;
+    if (/^(participant|actor|boundary|control|entity|database|collections|component)\s/i.test(line)) return `<span class="mk-keyword">${escH(line)}</span>`;
+    if (/^\s*(if|else|endif|loop|end|group|alt|opt|break|critical|fork|endfork)\b/i.test(line)) return `<span class="mk-keyword">${escH(line)}</span>`;
+    if (/->|<-|--><|-->|<-->/.test(line)) return `<span class="mk-edge">${escH(line)}</span>`;
+    return escH(line);
+  }).join("\n");
+}
+
 function highlightMermaid(text) {
   if (!text) return '';
   const escH = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -1018,11 +1070,18 @@ function openSidebar(cls, origCls) {
   // Render diagram SVG in sidebar with code toggle
   sbDiagram.innerHTML = '';
   if (data.diagram) {
-    const svg = renderFlatSVG(data.diagram);
-    const codeHtml = highlightMermaid(data.diagram);
+    const diagramFormat = data.meta?.diagram_format || 'mermaid';
+    const formatBadge = diagramFormat === 'plantuml' ? '<span class="sb-format-badge plantuml">PlantUML</span>' : '<span class="sb-format-badge mermaid">Mermaid</span>';
+    
+    const svg = diagramFormat === 'plantuml'
+      ? await renderPlantUMLDiagram(data.diagram)
+      : renderFlatSVG(data.diagram);
+    const codeHtml = diagramFormat === 'plantuml'
+      ? highlightPlantUML(data.diagram)
+      : highlightMermaid(data.diagram);
     sbDiagram.innerHTML = `
       <div class="sb-diagram-toggle">
-        <button class="sb-diagram-tab active" onclick="window.__showDiagramTab('diagram')">Diagram</button>
+        <button class="sb-diagram-tab active" onclick="window.__showDiagramTab('diagram')">Diagram ${formatBadge}</button>
         <button class="sb-diagram-tab" onclick="window.__showDiagramTab('code')">Code</button>
         <button class="sb-diagram-tab" onclick="window.__showDiagramTab('rich')">Rich</button>
         <button class="sb-diagram-expand" onclick="openDiagramOverlay()" title="Expand diagram (fullscreen, zoom)">⛶</button>

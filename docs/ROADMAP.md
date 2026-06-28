@@ -1,31 +1,16 @@
 # Roadmap
 
-## Completed
+## In Progress
 
-### Incremental analysis ✓
-Detect changed files since last scan and update only affected perspectives and elements — skip unchanged subtrees.
-- `omm incremental` — plan incremental updates
-- `omm incremental --mark` — bootstrap source tracking
-- `omm incremental --record` — mark element as scanned
-
-### Guide & onboarding skill ✓
-`/omm-guide` skill that walks new developers through the architecture interactively using the generated `.omm/` docs as context.
-
-### treedocs-inspired features ✓
-Features inspired by [DandyLyons/treedocs](https://github.com/DandyLyons/treedocs):
-- **Code ↔ docs coverage map** (`omm treecode`) — shows which source files are covered by .omm/ elements
-- **Structural signature** (`omm signature`) — SHA-256 hash of element paths for drift detection
-- **Reconciliation** (`omm reconcile`) — detect and fix orphaned sources, missing descriptions, broken refs
-- **External links** (`omm links`) — manage references to external docs, ADRs, wikis
-- **Element inspection** (`omm inspect`) — detailed element view with score, fields, links, source tracking
-- **Link resolution** (`omm inspect --links`) — graph-based @ref resolution with cycle detection
-- **YAML tree output** (`omm tree --yaml`) — YAML format for configs and CI reports
-- **Git hooks** (`omm hooks install --pre-commit`) — signature check before commits
+### PlantUML Diagram Support
+Add PlantUML rendering for sequence diagrams and C4 architecture models.
+- Format detection (`.puml`, `.plantuml` extensions)
+- Kroki proxy for online rendering
+- Local `plantuml.jar` support for offline/air-gapped use
+- C4 templates for enterprise architecture docs
+- See [multi-format-diagram-support-plan.md](./multi-format-diagram-support-plan.md)
 
 ## Planned
-
-### Sub-agent scan pipeline
-Split `/omm-scan` from a single skill into a multi-agent pipeline — parallel analysis per perspective, reduced token usage, faster scans.
 
 ### AI-powered search in viewer
 Natural language search across architecture docs — "where does auth happen?" finds relevant elements across perspectives.
@@ -35,3 +20,15 @@ Natural language search across architecture docs — "where does auth happen?" f
 
 ### Schema validation
 JSON Schema for `meta.yaml` validation — formal contract for external tools and CI.
+
+## Future Scope
+
+### Graphviz/DOT Support
+Dependency graph rendering with advanced layouts (fdp, neato, circo, osage) for large codebases with 100+ modules.
+- Client-side rendering via `@hpcc-js/wasm` (offline-capable)
+- Better subgraph clustering than Mermaid
+- `--format dot` option for `omm analyze`
+
+### D2 Diagram Support
+Modern diagramming language with grid layouts, icons, and SQL table support.
+- Requires local `d2` binary or Kroki proxy
