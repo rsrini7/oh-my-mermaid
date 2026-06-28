@@ -248,7 +248,21 @@ export function evaluateProject(cwd?: string): EvalReport {
   }
 
   // Detect diagram nodes without .omm elements (undocumented diagram nodes)
-  const existingPaths = new Set(allElements.map(e => e.path));
+  // Recursively collect all element paths (including nested grandchildren)
+  const allElementPaths = new Set<string>();
+  const collectPaths = (persp: string, nodePath: string[]) => {
+    const children = listNodes(persp, nodePath, cwd);
+    for (const child of children) {
+      const childPath = [persp, ...nodePath, child].join('/');
+      allElementPaths.add(childPath);
+      collectPaths(persp, [...nodePath, child]);
+    }
+  };
+  for (const persp of perspectives) {
+    allElementPaths.add(persp);
+    collectPaths(persp, []);
+  }
+  const existingPaths = allElementPaths;
   const undocumentedDiagramNodes: { parent: string; nodeId: string; label: string }[] = [];
 
   for (const el of allElements) {
