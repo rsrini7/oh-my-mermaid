@@ -4,12 +4,12 @@ export async function commandUpdate(): Promise<void> {
   // Step 1: Update npm package
   process.stderr.write('Updating omnimap CLI...\n');
   try {
-    const out = execSync('npm update -g omnimap 2>&1', { encoding: 'utf-8' }).trim();
+    const out = execSync('npm update -g @rsrini/omnimap 2>&1', { encoding: 'utf-8' }).trim();
     if (out) process.stderr.write(`  ${out}\n`);
     process.stderr.write('  CLI updated.\n');
   } catch (err: any) {
     process.stderr.write(`  npm update failed: ${err.message}\n`);
-    process.stderr.write('  Try manually: npm update -g omnimap\n');
+    process.stderr.write('  Try manually: npm update -g @rsrini/omnimap\n');
     return;
   }
 

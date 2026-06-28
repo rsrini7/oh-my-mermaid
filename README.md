@@ -25,7 +25,7 @@
 Paste this in your terminal:
 
 ```bash
-npm install -g omnimap && omm setup
+npm install -g @rsrini/omnimap && omm setup
 ```
 
 Then open your AI coding tool and use the `/omm-scan` skill:

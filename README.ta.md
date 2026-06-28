@@ -27,7 +27,7 @@
 இதை உங்கள் டெர்மினலில் ஒட்டவும்:
 
 ```bash
-npm install -g omnimap && omm setup
+npm install -g @rsrini/omnimap && omm setup
 ```
 
 பின்னர் உங்கள் AI குறியீட்டு கருவியைத் திறந்து `/omm-scan` திறனைப் பயன்படுத்தவும்:

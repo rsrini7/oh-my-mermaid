@@ -27,7 +27,7 @@
 터미널에 붙여넣기:
 
 ```bash
-npm install -g omnimap && omm setup
+npm install -g @rsrini/omnimap && omm setup
 ```
 
 AI 코딩 도구를 열고 `/omm-scan` 스킬을 실행:

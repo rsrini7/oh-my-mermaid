@@ -26,7 +26,7 @@
 在终端中粘贴：
 
 ```bash
-npm install -g omnimap && omm setup
+npm install -g @rsrini/omnimap && omm setup
 ```
 
 打开你的 AI 编码工具，使用 `/omm-scan` 技能：

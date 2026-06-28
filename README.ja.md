@@ -26,7 +26,7 @@
 ターミナルに貼り付けてください：
 
 ```bash
-npm install -g omnimap && omm setup
+npm install -g @rsrini/omnimap && omm setup
 ```
 
 AIコーディングツールを開き、`/omm-scan`スキルを実行：
