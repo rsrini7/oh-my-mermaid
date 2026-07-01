@@ -502,56 +502,73 @@ function renderGroup(cls, classesData, allClasses, level, seen = new Set(), scop
 // ── mermaid syntax highlighting ────────────────────────────
 /** Inject PlantUML dark theme skinparams when dark mode is active */
 function injectPlantUMLTheme(source) {
-  if (!isDark()) return source;
-  
   // Check if source already has theme/skinparam directives
-  if (/!theme\s+dark/i.test(source) || /skinparam\s+backgroundColor/i.test(source)) {
+  if (/!theme\s+/i.test(source) || /skinparam\s+backgroundColor/i.test(source)) {
     return source;
   }
   
-  // Insert dark theme skinparams after @startuml
-  // Using Catppuccin Mocha inspired colors for visibility
-  const darkSkinParams = [
-    'skinparam backgroundColor #1e1e2e',
-    'skinparam defaultBackgroundColor #1e1e2e',
-    'skinparam defaultFontColor #cdd6f4',
-    'skinparam defaultFontName Monospace',
+  const dark = isDark();
+  
+  // Strong contrast colors for both themes
+  const skinParams = [
+    'skinparam defaultFontName SansSerif',
     'skinparam shadowing false',
-    'skinparam roundCorner 8',
-    'skinparam arrowColor #b4befs',
-    'skinparam arrowFontColor #a6adc8',
+    'skinparam roundCorner 4',
     'skinparam arrowThickness 2',
-    'skinparam participantBackgroundColor #313244',
-    'skinparam participantBorderColor #585b70',
-    'skinparam participantFontColor #cdd6f4',
-    'skinparam participantFontSize 14',
-    'skinparam participantRoundCorner 8',
-    'skinparam sequenceLifeLineBorderColor #585b70',
-    'skinparam sequenceLifeLineBackgroundColor #313244',
+    'skinparam participantFontSize 13',
+    'skinparam participantRoundCorner 4',
     'skinparam sequenceLifeLineThickness 2',
-    'skinparam sequenceGroupBackgroundColor #181825',
-    'skinparam sequenceGroupBorderColor #45475a',
-    'skinparam sequenceGroupBorderFontColor #cdd6f4',
-    'skinparam sequenceGroupFontSize 13',
-    'skinparam sequenceDividerBackgroundColor #181825',
-    'skinparam sequenceDividerBorderColor #45475a',
-    'skinparam sequenceDividerFontColor #cdd6f4',
-    'skinparam sequenceReferenceBackgroundColor #313244',
-    'skinparam sequenceReferenceBorderColor #585b70',
-    'skinparam sequenceReferenceFontColor #cdd6f4',
+    'skinparam sequenceGroupFontSize 12',
     'skinparam sequenceMessageAlign center',
-    'skinparam sequenceMessageFontSize 13',
-    'skinparam sequenceMessageTextAlignment center',
-    'skinparam noteBackgroundColor #313244',
-    'skinparam noteBorderColor #585b70',
-    'skinparam noteFontColor #cdd6f4',
-    'skinparam noteFontSize 12',
-    'skinparam sequenceBoxBorderColor #45475a',
-    'skinparam sequenceBoxBackgroundColor #181825',
-    'skinparam sequenceBoxFontColor #cdd6f4'
+    'skinparam sequenceMessageFontSize 12',
+    'skinparam noteFontSize 11',
+    // Colors
+    `skinparam backgroundColor ${dark ? '#1e1e2e' : '#ffffff'}`,
+    `skinparam defaultBackgroundColor ${dark ? '#1e1e2e' : '#ffffff'}`,
+    `skinparam defaultFontColor ${dark ? '#cdd6f4' : '#1a1a1a'}`,
+    `skinparam arrowColor ${dark ? '#89b4fa' : '#2563eb'}`,
+    `skinparam arrowFontColor ${dark ? '#bac2de' : '#374151'}`,
+    // Participant boxes
+    `skinparam participantBackgroundColor ${dark ? '#313244' : '#e2e8f0'}`,
+    `skinparam participantBorderColor ${dark ? '#585b70' : '#64748b'}`,
+    `skinparam participantFontColor ${dark ? '#cdd6f4' : '#1e293b'}`,
+    // Actor
+    `skinparam actorBackgroundColor ${dark ? '#313244' : '#e2e8f0'}`,
+    `skinparam actorBorderColor ${dark ? '#585b70' : '#64748b'}`,
+    `skinparam actorFontColor ${dark ? '#cdd6f4' : '#1e293b'}`,
+    // Database
+    `skinparam databaseBackgroundColor ${dark ? '#313244' : '#dbeafe'}`,
+    `skinparam databaseBorderColor ${dark ? '#585b70' : '#3b82f6'}`,
+    `skinparam databaseFontColor ${dark ? '#cdd6f4' : '#1e40af'}`,
+    // Lifelines
+    `skinparam sequenceLifeLineBorderColor ${dark ? '#585b70' : '#94a3b8'}`,
+    `skinparam sequenceLifeLineBackgroundColor ${dark ? '#313244' : '#f1f5f9'}`,
+    // Groups/dividers
+    `skinparam sequenceGroupBackgroundColor ${dark ? '#181825' : '#f8fafc'}`,
+    `skinparam sequenceGroupBorderColor ${dark ? '#45475a' : '#cbd5e1'}`,
+    `skinparam sequenceGroupBorderFontColor ${dark ? '#cdd6f4' : '#334155'}`,
+    `skinparam sequenceDividerBackgroundColor ${dark ? '#181825' : '#f8fafc'}`,
+    `skinparam sequenceDividerBorderColor ${dark ? '#45475a' : '#cbd5e1'}`,
+    `skinparam sequenceDividerFontColor ${dark ? '#cdd6f4' : '#334155'}`,
+    // References
+    `skinparam sequenceReferenceBackgroundColor ${dark ? '#313244' : '#e2e8f0'}`,
+    `skinparam sequenceReferenceBorderColor ${dark ? '#585b70' : '#64748b'}`,
+    `skinparam sequenceReferenceFontColor ${dark ? '#cdd6f4' : '#1e293b'}`,
+    // Notes
+    `skinparam noteBackgroundColor ${dark ? '#313244' : '#fef3c7'}`,
+    `skinparam noteBorderColor ${dark ? '#585b70' : '#f59e0b'}`,
+    `skinparam noteFontColor ${dark ? '#cdd6f4' : '#92400e'}`,
+    // Box
+    `skinparam sequenceBoxBorderColor ${dark ? '#45475a' : '#94a3b8'}`,
+    `skinparam sequenceBoxBackgroundColor ${dark ? '#181825' : '#f1f5f9'}`,
+    `skinparam sequenceBoxFontColor ${dark ? '#cdd6f4' : '#334155'}`,
+    // Title
+    `skinparam titleFontColor ${dark ? '#cdd6f4' : '#111827'}`,
+    // Stereotype
+    `skinparam stereotypeFontColor ${dark ? '#a6adc8' : '#6b7280'}`
   ].join('\n');
   
-  return source.replace(/@startuml/i, `@startuml\n${darkSkinParams}`);
+  return source.replace(/@startuml/i, `@startuml\n${skinParams}`);
 }
 
 /** Render PlantUML via API proxy */
@@ -1127,13 +1144,13 @@ function resolveDataKeyExact(cls) {
   return null;
 }
 
-window.__openSb = function(cls) {
+window.__openSb = async function(cls) {
   // If in graph view, exit graph mode first
   if (_graphMode) {
     _graphMode = false;
     const btn = document.getElementById('graph-btn');
     if (btn) btn.classList.remove('active');
-    rebuildCanvas();
+    await rebuildCanvas();
     if (_savedViewport) {
       vpX = _savedViewport.vpX;
       vpY = _savedViewport.vpY;
@@ -1149,7 +1166,7 @@ window.__openSb = function(cls) {
     if (btn) btn.classList.remove('active');
     canvasWrap.classList.remove('network-mode');
     if (_networkSimulation) { _networkSimulation.stop(); _networkSimulation = null; }
-    rebuildCanvas();
+    await rebuildCanvas();
     if (_savedViewport) {
       vpX = _savedViewport.vpX;
       vpY = _savedViewport.vpY;
@@ -1172,7 +1189,7 @@ window.__openSb = function(cls) {
   var activeNav = document.querySelector('.nav-item.active');
   if (activeNav) activeNav.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   var sidebarAlreadyOpen = sidebar.classList.contains('open');
-  openSidebar(dataKey, cls);
+  await openSidebar(dataKey, cls);
   // Load and render flows for this element
   loadFlows(cls).then(() => renderFlowBar(cls));
   if (sidebarAlreadyOpen) {
@@ -1253,7 +1270,10 @@ async function openSidebar(cls, origCls) {
         <button class="sb-diagram-tab active" onclick="window.__showDiagramTab('diagram')">Diagram ${formatBadge}</button>
         <button class="sb-diagram-tab" onclick="window.__showDiagramTab('code')">Code</button>
         <button class="sb-diagram-tab" onclick="window.__showDiagramTab('rich')">Rich</button>
-        <button class="sb-diagram-expand" onclick="openDiagramOverlay()" title="Expand diagram (fullscreen, zoom)">⛶</button>
+        <span class="sb-diagram-actions">
+          <button class="sb-diagram-expand" onclick="window.__refreshDiagram()" title="Refresh diagram (apply theme)">↻</button>
+          <button class="sb-diagram-expand" onclick="openDiagramOverlay()" title="Expand diagram (fullscreen, zoom)">⛶</button>
+        </span>
       </div>
       <div class="sb-diagram-view">${svg || '<div style="padding:16px;color:var(--text-muted)">Could not render diagram</div>'}</div>
       <div class="sb-code-view" style="display:none"><pre class="sb-code-pre">${codeHtml}</pre></div>
@@ -2199,9 +2219,9 @@ window.toggleTheme = async function() {
   } else {
     await rebuildCanvas();
   }
-  // Also re-render sidebar diagram if open
+  // Auto-refresh sidebar diagram after theme change
   if (selectedCls) {
-    window.__openSb(selectedCls);
+    await window.__refreshDiagram();
   }
 };
 window.__showDiagramTab = function(tab) {
@@ -2220,6 +2240,14 @@ window.__showDiagramTab = function(tab) {
     if (tab === 'rich') renderRichView();
   }
 };
+window.__refreshDiagram = async function() {
+  if (selectedCls) {
+    // Clear PlantUML cache to force re-render with current theme
+    Object.keys(_plantUMLSvgCache).forEach(key => delete _plantUMLSvgCache[key]);
+    await window.__openSb(selectedCls);
+  }
+};
+
 window.__scrubTimeline = function(idx) {
   const versions = window.__timelineVersions;
   if (!versions) return;
@@ -2926,6 +2954,8 @@ let _overlayScale = 1;
 let _overlayPanX = 0, _overlayPanY = 0;
 let _overlayPanning = false, _overlayPanStart = { x: 0, y: 0 };
 
+let _overlayActiveFlow = null;
+
 window.openDiagramOverlay = function() {
   const sbView = document.querySelector('#sb-diagram .sb-diagram-view');
   if (!sbView) return;
@@ -2935,6 +2965,7 @@ window.openDiagramOverlay = function() {
   const overlay = document.getElementById('diagram-overlay');
   const body = document.getElementById('diagram-overlay-body');
   const title = document.getElementById('diagram-overlay-title');
+  const controls = document.getElementById('diagram-overlay-controls');
   title.textContent = sbTitle.textContent + ' — Diagram';
 
   // Clone SVG into overlay
@@ -2944,6 +2975,34 @@ window.openDiagramOverlay = function() {
   clone.style.transformOrigin = '0 0';
   body.appendChild(clone);
 
+  // Add flow chips if flows exist
+  const flows = _flowsData[selectedCls] || [];
+  _overlayActiveFlow = null;
+  
+  // Remove existing flow bar if any
+  const existingFlowBar = overlay.querySelector('.overlay-flow-bar');
+  if (existingFlowBar) existingFlowBar.remove();
+  
+  if (flows.length > 0) {
+    const flowBar = document.createElement('div');
+    flowBar.className = 'overlay-flow-bar';
+    flowBar.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap';
+    flowBar.innerHTML = '<span style="font-size:11px;color:var(--text-muted);font-weight:600">Flows:</span>';
+    
+    flows.forEach(f => {
+      const chip = document.createElement('button');
+      chip.className = 'flow-chip';
+      chip.textContent = f.name;
+      chip.title = f.description || f.name;
+      chip.onclick = () => toggleOverlayFlow(f.name, flows);
+      flowBar.appendChild(chip);
+    });
+    
+    // Insert after header
+    const header = overlay.querySelector('#diagram-overlay-header');
+    header.after(flowBar);
+  }
+
   _overlayScale = 1;
   _overlayPanX = 0;
   _overlayPanY = 0;
@@ -2952,6 +3011,72 @@ window.openDiagramOverlay = function() {
 
   // Fit to window after a tick
   requestAnimationFrame(() => diagramOverlayFit());
+}
+
+function toggleOverlayFlow(flowName, flows) {
+  const overlay = document.getElementById('diagram-overlay');
+  const svg = overlay.querySelector('svg');
+  if (!svg) return;
+  
+  // Deactivate if clicking same flow
+  if (_overlayActiveFlow === flowName) {
+    _overlayActiveFlow = null;
+    svg.classList.remove('flowing');
+    svg.querySelectorAll('.flow-lit').forEach(el => el.classList.remove('flow-lit'));
+    overlay.querySelectorAll('.flow-chip').forEach(c => c.classList.remove('active'));
+    return;
+  }
+  
+  _overlayActiveFlow = flowName;
+  const flow = flows.find(f => f.name === flowName);
+  if (!flow) return;
+  
+  svg.classList.add('flowing');
+  
+  // Collect nodes and edges to highlight
+  const litNodes = new Set();
+  const litEdges = new Set();
+  for (const step of flow.steps) {
+    if (step.node) litNodes.add(step.node);
+    if (step.edge) {
+      const [from, to] = step.edge.split('->');
+      if (from && to) litEdges.add(`${from}->${to}`);
+    }
+  }
+  
+  // Highlight nodes
+  svg.querySelectorAll('.reg-node, .grp-node').forEach(el => {
+    const cls = el.getAttribute('data-cls');
+    const shortName = cls ? cls.split('/').pop() : '';
+    if (litNodes.has(cls) || litNodes.has(shortName)) {
+      el.classList.add('flow-lit');
+    } else {
+      el.classList.remove('flow-lit');
+    }
+  });
+  
+  // Highlight edges
+  svg.querySelectorAll('.edge-path').forEach(el => {
+    const from = el.getAttribute('data-from');
+    const to = el.getAttribute('data-to');
+    const key = `${from}->${to}`;
+    const fromShort = from ? from.split('/').pop() : '';
+    const toShort = to ? to.split('/').pop() : '';
+    const keyShort = `${fromShort}->${toShort}`;
+    const isLit = litEdges.has(key) || litEdges.has(keyShort) ||
+      (litNodes.has(from) && litNodes.has(to)) ||
+      (litNodes.has(fromShort) && litNodes.has(toShort));
+    if (isLit) {
+      el.classList.add('flow-lit');
+    } else {
+      el.classList.remove('flow-lit');
+    }
+  });
+  
+  // Update active chip
+  overlay.querySelectorAll('.flow-chip').forEach(c => {
+    c.classList.toggle('active', c.textContent === flowName);
+  });
 }
 
 window.closeDiagramOverlay = function() {
